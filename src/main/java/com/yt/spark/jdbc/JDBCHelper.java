@@ -28,7 +28,7 @@ public class JDBCHelper {
     //实现单例化
     private static JDBCHelper instance = null;
 
-    public JDBCHelper getInstance() {
+    public static JDBCHelper getInstance() {
         if (instance == null) {
             synchronized (JDBCHelper.class) {
                 if (instance == null) {
@@ -39,7 +39,7 @@ public class JDBCHelper {
         return instance;
     }
 
-    private LinkedList<Connection> datasources = null;
+    private LinkedList<Connection> datasources = new LinkedList<Connection>();
 
     private JDBCHelper() {
         int datasourceSize = Configuration.getInteger(Constants.JDBC_DATASOURCE_SIZE);
@@ -186,7 +186,7 @@ public class JDBCHelper {
     /**
      * 查询回调接口
      */
-    static interface QueryCallBack {
+    public static interface QueryCallBack {
         /**
          * 处理查询结果
          * @param rs
