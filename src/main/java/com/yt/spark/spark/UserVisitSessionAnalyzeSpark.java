@@ -1,8 +1,8 @@
 package com.yt.spark.spark;
 
 import com.alibaba.fastjson.JSONObject;
-import com.yt.spark.scala.conf.Configuration;
-import com.yt.spark.scala.conf.Constants;
+import com.yt.spark.conf.Configuration;
+import com.yt.spark.conf.Constants;
 import com.yt.spark.dao.ISessionAggrStatDAO;
 import com.yt.spark.dao.ITaskDAO;
 import com.yt.spark.dao.impl.DAOFactory;

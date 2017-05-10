@@ -1,8 +1,11 @@
 package com.yt.spark;
 
-import com.yt.spark.util.DateUtils;
+import com.yt.spark.util.*;
 import com.yt.spark.util.StringUtils;
-import org.apache.spark.sql.*;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.RowFactory;
+import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 
@@ -15,7 +18,7 @@ import java.util.*;
  * Created by yangtong on 17/5/8.
  */
 public class MockData {
-    public static void mock(SparkSession spark) {
+    public static void mockData(SparkSession spark) {
         List<Row> rows = new ArrayList<Row>();
 
         String[] searchKeywords = new String[] {"火锅", "蛋糕", "重庆辣子鸡", "重庆小面",
@@ -43,9 +46,7 @@ public class MockData {
                     String payProductIds = null;
 
                     String action = actions[random.nextInt(4)];
-//                    if ("search".equals(action)) {
-//                        searchKeyword = searchKeywords[random.nextInt(10)];
-//                    }
+
                     switch (action) {
                         case "search" :
                             searchKeyword = searchKeywords[random.nextInt(10)];
@@ -75,8 +76,7 @@ public class MockData {
             }
         }
 
-//        JavaRDD<Row> rowsRDD = spark.;
-//        spark.sparkContext().
+
 
         StructType schema = DataTypes.createStructType(Arrays.asList(
            DataTypes.createStructField("date", DataTypes.StringType, true),
@@ -95,10 +95,8 @@ public class MockData {
 
         Dataset<Row> df = spark.createDataFrame(rows, schema);
 
-        df.registerTempTable("user_visit_action");
-        for (Row row : df.takeAsList(1)) {
-            System.out.println(row);
-        }
+        df.createOrReplaceTempView("user_visit_action");
+        df.takeAsList(1).forEach(System.out::println);
 
         /**
          * ======================================
@@ -128,10 +126,9 @@ public class MockData {
                 DataTypes.createStructField("sex", DataTypes.StringType, true)));
 
         Dataset<Row> df2 = spark.createDataFrame(rows,schema2);
-        df2.registerTempTable("user_info");
-        for (Row row : df2.takeAsList(1)) {
-            System.out.println(row);
-        }
+
+        df2.createOrReplaceTempView("user_info");
+        df2.toDF().takeAsList(1).forEach(System.out::println);
 
         /**
          * ==========================================
@@ -155,11 +152,15 @@ public class MockData {
                 DataTypes.createStructField("extend_info", DataTypes.StringType, true)));
 
         Dataset<Row> df3 = spark.createDataFrame(rows, schema3);
-        df3.registerTempTable("product_info");
-        for (Row row : df3.takeAsList(1)) {
-            System.out.println(row);
-        }
 
+        df3.createOrReplaceTempView("product_info");
+        df3.toDF().takeAsList(1).forEach(System.out::println);
+
+    }
+
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder().master("local[2]").appName("testMockData").getOrCreate();
+        mockData(spark);
     }
 
 }

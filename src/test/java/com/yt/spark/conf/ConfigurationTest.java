@@ -1,4 +1,4 @@
-package com.yt.spark.scala.conf;
+package com.yt.spark.conf;
 
 
 /**
