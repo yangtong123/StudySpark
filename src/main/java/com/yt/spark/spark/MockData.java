@@ -158,4 +158,9 @@ public class MockData {
 
     }
 
+    public static void main(String[] args) {
+        SparkSession spark = SparkSession.builder().master("local[2]").appName("testMockData").getOrCreate();
+        mockData(spark);
+    }
+
 }

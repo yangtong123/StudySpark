@@ -2,8 +2,8 @@ package com.yt.spark.util;
 
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import com.yt.spark.conf.Configuration;
-import com.yt.spark.conf.Constants;
+import com.yt.spark.scala.conf.Configuration;
+import com.yt.spark.scala.conf.Constants;
 
 /**
  * 参数工具类

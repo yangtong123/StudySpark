@@ -1,5 +1,6 @@
 package com.yt.spark.dao.impl;
 
+import com.yt.spark.dao.ISessionAggrStatDAO;
 import com.yt.spark.dao.ITaskDAO;
 
 /**
@@ -12,5 +13,13 @@ public class DAOFactory {
      */
     public static ITaskDAO getTaskDAO() {
         return new TaskDAOImpl();
+    }
+
+    /**
+     * 获得SessionAggrStatDAO
+     * @return
+     */
+    public static ISessionAggrStatDAO getSessionAggrStatDAO() {
+        return new SessionAggrStatDAOImpl();
     }
 }

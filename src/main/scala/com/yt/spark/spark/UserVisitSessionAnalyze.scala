@@ -1,7 +1,7 @@
 package com.yt.spark.spark
 
 import com.alibaba.fastjson.JSONObject
-import com.yt.spark.conf.{Configuration, Constants}
+import com.yt.spark.scala.conf.Constants
 import com.yt.spark.util.{ParamUtils, StringUtils}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{DataFrame, Row, SparkSession}

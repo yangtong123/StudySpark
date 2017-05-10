@@ -39,6 +39,7 @@ public class TaskDAOImpl implements ITaskDAO {
                             String finishTime = rs.getString(5);
                             String taskType = rs.getString(6);
                             String taskStatus = rs.getString(7);
+                            String taskParams = rs.getString(8);
 
                             task.setTaskId(taskId);
                             task.setTaskName(taskName);
@@ -47,6 +48,7 @@ public class TaskDAOImpl implements ITaskDAO {
                             task.setFinishTime(finishTime);
                             task.setTaskType(taskType);
                             task.setTaskStatus(taskStatus);
+                            task.setTaskParam(taskParams);
                         }
                     }
                 });

@@ -1,7 +1,7 @@
 package com.yt.spark.jdbc;
 
-import com.yt.spark.conf.Configuration;
-import com.yt.spark.conf.Constants;
+import com.yt.spark.scala.conf.Configuration;
+import com.yt.spark.scala.conf.Constants;
 
 import java.sql.*;
 import java.util.LinkedList;

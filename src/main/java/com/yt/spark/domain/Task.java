@@ -14,6 +14,9 @@ public class Task implements Serializable {
     private String finishTime;
     private String taskType;
     private String taskStatus;
+    private String taskParam;
+
+
 
     public long getTaskId() {
         return taskId;
@@ -69,5 +72,13 @@ public class Task implements Serializable {
 
     public void setTaskStatus(String taskStatus) {
         this.taskStatus = taskStatus;
+    }
+
+    public String getTaskParam() {
+        return taskParam;
+    }
+
+    public void setTaskParam(String taskParam) {
+        this.taskParam = taskParam;
     }
 }
