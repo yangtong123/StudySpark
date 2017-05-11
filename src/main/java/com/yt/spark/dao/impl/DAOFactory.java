@@ -1,6 +1,8 @@
 package com.yt.spark.dao.impl;
 
 import com.yt.spark.dao.ISessionAggrStatDAO;
+import com.yt.spark.dao.ISessionDetailDAO;
+import com.yt.spark.dao.ISessionRandomExtractDAO;
 import com.yt.spark.dao.ITaskDAO;
 
 /**
@@ -21,5 +23,13 @@ public class DAOFactory {
      */
     public static ISessionAggrStatDAO getSessionAggrStatDAO() {
         return new SessionAggrStatDAOImpl();
+    }
+
+    public static ISessionRandomExtractDAO getSessionRandomExtractDAO() {
+        return new SessionRandomExtractDAOImpl();
+    }
+
+    public static ISessionDetailDAO getSessionDetailDAO() {
+        return new SessionDetailDAOImpl();
     }
 }

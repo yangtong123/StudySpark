@@ -31,7 +31,6 @@ public class ParamUtils {
 				e.printStackTrace();
 			}
 		}
-		
 		return null;
 	}
 	
@@ -45,6 +44,7 @@ public class ParamUtils {
 		if(jsonArray != null && jsonArray.size() > 0) {
 			return jsonArray.getString(0);
 		}
+
 		return null;
 	}
 	

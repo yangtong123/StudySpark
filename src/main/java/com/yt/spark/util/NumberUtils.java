@@ -19,5 +19,6 @@ public class NumberUtils {
 		BigDecimal bd = new BigDecimal(num);  
 		return bd.setScale(scale, BigDecimal.ROUND_HALF_UP).doubleValue();
 	}
-	
+
+
 }

@@ -101,7 +101,6 @@ public class ValidUtils {
 				return true;
 			}
  		}
-		
 		return false;
 	}
 	

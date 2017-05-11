@@ -177,5 +177,7 @@ public class DateUtils {
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmm");  
 		return sdf.format(date);
 	}
+
+	
 	
 }
