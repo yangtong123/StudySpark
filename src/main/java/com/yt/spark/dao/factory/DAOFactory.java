@@ -1,26 +1,17 @@
-package com.yt.spark.dao.impl;
+package com.yt.spark.dao.factory;
 
-import com.yt.spark.dao.ISessionAggrStatDAO;
-import com.yt.spark.dao.ISessionDetailDAO;
-import com.yt.spark.dao.ISessionRandomExtractDAO;
-import com.yt.spark.dao.ITaskDAO;
+import com.yt.spark.dao.*;
+import com.yt.spark.dao.impl.*;
 
 /**
  * Created by yangtong on 17/5/8.
  */
 public class DAOFactory {
-    /**
-     * 使用工厂模式来获取TaskDAO
-     * @return
-     */
+
     public static ITaskDAO getTaskDAO() {
         return new TaskDAOImpl();
     }
 
-    /**
-     * 获得SessionAggrStatDAO
-     * @return
-     */
     public static ISessionAggrStatDAO getSessionAggrStatDAO() {
         return new SessionAggrStatDAOImpl();
     }
@@ -31,5 +22,13 @@ public class DAOFactory {
 
     public static ISessionDetailDAO getSessionDetailDAO() {
         return new SessionDetailDAOImpl();
+    }
+
+    public static ITop10CategoryDAO getTop10CategoryDAO() {
+        return new Top10CategoryDAOImpl();
+    }
+
+    public static ITop10SessionDAO getTop10SessionDAO() {
+        return new Top10SessionDAOImpl();
     }
 }
