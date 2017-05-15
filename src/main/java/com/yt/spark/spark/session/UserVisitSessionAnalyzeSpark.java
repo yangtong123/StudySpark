@@ -1187,7 +1187,7 @@ public class UserVisitSessionAnalyzeSpark {
                         Iterator<String> iterator = tuple2._2.iterator();
 
                         //定义取top10的排序数组
-                        String[] top10Sessions = new String[10];
+                        String[] top10Sessions = new String[3];
 
                         while (iterator.hasNext()) {
                             String sessionCount = iterator.next();
@@ -1201,7 +1201,7 @@ public class UserVisitSessionAnalyzeSpark {
                                     long _count = Long.valueOf(top10Sessions[i].split(",")[1]);
 
                                     if (count > _count) {
-                                        for (int j = 9; j > i; j--) {
+                                        for (int j = top10Sessions.length-1; j > i; j--) {
                                             top10Sessions[j] = top10Sessions[j-1];
                                         }
                                         top10Sessions[i] = sessionCount;
@@ -1234,6 +1234,42 @@ public class UserVisitSessionAnalyzeSpark {
                         return list.iterator();
                     }
                 });
+
+        /**
+         * 第四步：获取top10活跃session的明细数据，并写入mysql
+         */
+        JavaPairRDD<String, Tuple2<String, Row>> sessionDetailRDD =
+                top10SessionRDD.join(sessionid2DetailRDD);
+
+        sessionDetailRDD.foreach(
+                new VoidFunction<Tuple2<String, Tuple2<String, Row>>>() {
+                    @Override
+                    public void call(Tuple2<String, Tuple2<String, Row>> tuple2) throws Exception {
+                        Row row = tuple2._2._2;
+
+                        SessionDetail sessionDetail = new SessionDetail();
+                        sessionDetail.setTaskid(taskId);
+                        try {
+                            sessionDetail.setUserid(row.getLong(Constants.USER_VISIT_ACTION_USER_ID));
+                            sessionDetail.setSessionid(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID));
+                            sessionDetail.setPageid(row.getLong(Constants.USER_VISIT_ACTION_PAGE_ID));
+                            sessionDetail.setActionTime(row.getString(Constants.USER_VISIT_ACTION_ACTION_TIME));
+                            sessionDetail.setSearchKeywords(row.getString(Constants.USER_VISIT_ACTION_SEARCH_KEYWORD));
+                            sessionDetail.setClickCategoryId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_CATEGORY_ID));
+                            sessionDetail.setClickProductId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_PRODUCT_ID));
+                            sessionDetail.setOrderCategoryIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_CATEGORY_IDS));
+                            sessionDetail.setOrderProductIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_PRODUCT_IDS));
+                            sessionDetail.setPayCategoryIds(row.getString(Constants.USER_VISIT_ACTION_PAY_CATEGORY_IDS));
+                            sessionDetail.setPayProductIds(row.getString(Constants.USER_VISIT_ACTION_PAY_PRODUCT_IDS));
+                        } catch (Exception e) {
+
+                        }
+
+                        ISessionDetailDAO sessionDetailDAO = DAOFactory.getSessionDetailDAO();
+                        sessionDetailDAO.insert(sessionDetail);
+                    }
+                });
+
 
 
 
