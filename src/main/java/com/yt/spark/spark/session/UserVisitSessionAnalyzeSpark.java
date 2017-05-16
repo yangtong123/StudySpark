@@ -8,9 +8,13 @@ import com.yt.spark.dao.factory.DAOFactory;
 import com.yt.spark.domain.*;
 import com.yt.spark.spark.MockData;
 import com.yt.spark.util.*;
+import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntList;
+import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.*;
 import org.apache.spark.api.java.Optional;
 import org.apache.spark.api.java.function.*;
+import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -81,7 +85,7 @@ public class UserVisitSessionAnalyzeSpark {
 
 
         //按时间比例随机抽取
-        randomExtractSession(task.getTaskId(), sessionid2AggrInfoRDD, sessionid2ActionRDD);
+        randomExtractSession(task.getTaskId(), spark, sessionid2AggrInfoRDD, sessionid2ActionRDD);
 
 
         /**
@@ -101,6 +105,7 @@ public class UserVisitSessionAnalyzeSpark {
         getTop10Session(spark, task.getTaskId(), top10CategoryList, sessionid2DetailRDD);
 
 
+
         spark.close();
     }
 
@@ -113,14 +118,20 @@ public class UserVisitSessionAnalyzeSpark {
     private static SparkSession getSparkSession() {
         boolean local = Configuration.getBoolean(Constants.SPARK_LOCAL);
         SparkSession spark = null;
+        SparkConf conf = new SparkConf()
+                .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+                .registerKryoClasses(new Class[]{CategorySortKey.class}); //这个key在shuffle的时候，进行网络传输，因此设置为kyro序列化
+
         if (local) {
             spark = SparkSession.builder()
                     .appName(Constants.SPARK_APP_NAME_SESSION)
                     .master("local")
+                    .config(conf)
                     .getOrCreate();
         } else {
             spark = SparkSession.builder()
                     .appName(Constants.SPARK_APP_NAME_SESSION)
+                    .config(conf)
                     .enableHiveSupport()
                     .getOrCreate();
         }
@@ -485,6 +496,7 @@ public class UserVisitSessionAnalyzeSpark {
      * @param sessionid2AggrInfoRDD
      */
     private static void randomExtractSession(final long taskid,
+                                             SparkSession spark,
                                              JavaPairRDD<String, String> sessionid2AggrInfoRDD,
                                              JavaPairRDD<String, Row> sessionid2ActionRDD) {
         //得到<yyyy-MM-dd_HH, aggrInfo>
@@ -506,19 +518,19 @@ public class UserVisitSessionAnalyzeSpark {
 
         //按时间比例随机抽取,计算出每天每小时要抽取session的索引
         //将<yyyy-MM-dd_HH, count>转变为<yyyy-MM-dd, <MM, count>>
-        Map<String, Map<String, Long>> dateHourCountMap = new HashMap<String, Map<String, Long>>();
+        Map<String, Map<String, Integer>> dateHourCountMap = new HashMap<String, Map<String, Integer>>();
         for (Map.Entry<String, Long> countEntry : countMap.entrySet()) {
             String dateHour = countEntry.getKey();
             String date = dateHour.split("_")[0];
             String hour = dateHour.split("_")[1];
             long count = countEntry.getValue();
 
-            Map<String, Long> hourCountMap = dateHourCountMap.get(date);
+            Map<String, Integer> hourCountMap = dateHourCountMap.get(date);
             if (hourCountMap == null) {
                 hourCountMap = new HashMap<>();
                 dateHourCountMap.put(date, hourCountMap);
             }
-            hourCountMap.put(hour, count);
+            hourCountMap.put(hour, (int) count);
         }
         //总共要抽取100个session，先按照天数，进行平分
         long extractNumberPerDay = 100 / dateHourCountMap.size();
@@ -527,9 +539,9 @@ public class UserVisitSessionAnalyzeSpark {
         Map<String, Map<String, List<Integer>>> dateHourExtractMap = new HashMap<String, Map<String, List<Integer>>>();
         Random random = new Random();
 
-        for (Map.Entry<String, Map<String, Long>> dateHourCountEntry : dateHourCountMap.entrySet()) {
+        for (Map.Entry<String, Map<String, Integer>> dateHourCountEntry : dateHourCountMap.entrySet()) {
             String date = dateHourCountEntry.getKey();
-            Map<String, Long> hourCountMap = dateHourCountEntry.getValue();
+            Map<String, Integer> hourCountMap = dateHourCountEntry.getValue();
 
             Map<String, List<Integer>> hourExtractMap = dateHourExtractMap.get(date);
             if (hourExtractMap == null) {
@@ -544,7 +556,7 @@ public class UserVisitSessionAnalyzeSpark {
             }
 
             //遍历小时
-            for (Map.Entry<String, Long> hourCountEntry : hourCountMap.entrySet()) {
+            for (Map.Entry<String, Integer> hourCountEntry : hourCountMap.entrySet()) {
                 String hour = hourCountEntry.getKey();
                 long count = hourCountEntry.getValue();
                 //计算每个小时的session的数量占据当天session数量的比例,然后得到每个小时要抽取的数量
@@ -572,6 +584,45 @@ public class UserVisitSessionAnalyzeSpark {
             }
         }
 
+        /**
+         * fastutil的使用
+         *
+         */
+        Map<String, Map<String, IntList>> fastutilDateHourExtractMap =
+                new HashMap<String, Map<String, IntList>>();
+
+        for (Map.Entry<String, Map<String, List<Integer>>> dateHourExtractEntry :
+                dateHourExtractMap.entrySet()) {
+            String date = dateHourExtractEntry.getKey();
+
+            Map<String, List<Integer>> hourExtractMap = dateHourExtractEntry.getValue();
+            Map<String, IntList> fastutilHourExtractMap = new HashMap<>();
+
+            for (Map.Entry<String, List<Integer>> hourExtractEntry :
+                    hourExtractMap.entrySet()) {
+                String hour = hourExtractEntry.getKey();
+                List<Integer> extractList = hourExtractEntry.getValue();
+                IntList fastutilExtractList = new IntArrayList();
+
+                for (int i = 0; i < extractList.size(); i++) {
+                    fastutilExtractList.add(extractList.get(i));
+                }
+
+                fastutilHourExtractMap.put(hour, fastutilExtractList);
+            }
+
+            fastutilDateHourExtractMap.put(date, fastutilHourExtractMap);
+        }
+
+
+        /**
+         * 广播变量
+         * 这个map有点大，为了避免每个task都拷贝一份这个map，就把它设置成广播变量
+         */
+        JavaSparkContext javaSparkContext = new JavaSparkContext(spark.sparkContext());
+        final Broadcast<Map<String, Map<String, IntList>>> dateHourExtractMapBroadcast =
+                javaSparkContext.broadcast(fastutilDateHourExtractMap);
+
         //根据随机索引进行抽取
         JavaPairRDD<String, Iterable<String>> time2session2RDD = time2AggrInfoRDD.groupByKey();
 
@@ -587,6 +638,12 @@ public class UserVisitSessionAnalyzeSpark {
                         String hour = dateHour.split("_")[1];
                         Iterator<String> iterator = tuple2._2.iterator();
 
+
+                        /**
+                         * 使用广播变量的时候，直接调用广播变量的value方法
+                         */
+                        Map<String, Map<String, IntList>> dateHourExtractMap =
+                                dateHourExtractMapBroadcast.value();
                         List<Integer> extractIndexList = dateHourExtractMap.get(date).get(hour);
                         ISessionRandomExtractDAO sessionRandomExtractDAO = DAOFactory.getSessionRandomExtractDAO();
 
