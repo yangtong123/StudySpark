@@ -25,6 +25,7 @@ import scala.Tuple2;
 import java.util.*;
 
 /**
+ * 页面切片转化率spark程序
  * Created by yangtong on 17/5/18.
  */
 public class PageOneStepConvertRateSpark {
