@@ -31,4 +31,8 @@ public class DAOFactory {
     public static ITop10SessionDAO getTop10SessionDAO() {
         return new Top10SessionDAOImpl();
     }
+
+    public static IPageSplitConvertRateDAO getPageSplitConvertRateDAO() {
+        return new PageSplitConvertRateDAOImpl();
+    }
 }

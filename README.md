@@ -1,7 +1,9 @@
 # StudySpark
 spark的一个小项目
 
-2017-05-15 将fastutilDateHourExtractMap转为fastutil，并设为广播变量
+2017-05-18 添加页面切片转化率的模块
+
+2017-05-15 将fastutilDateHourExtractMap转为fastutil，并设为广播变量，并使用Kryo序列化将CategorySortKey序列化
 
 2017-05-12 实现得到top10的category和session, 并持久化到数据库
 

@@ -16,7 +16,7 @@ public class Configuration {
         try {
             InputStream in = Configuration.class
                     .getClassLoader().getResourceAsStream("my.properties");
-            //可以把key/value对加载进去了
+            //可以把key value对加载进去了
             prop.load(in);
         } catch (Exception e) {
             e.printStackTrace();

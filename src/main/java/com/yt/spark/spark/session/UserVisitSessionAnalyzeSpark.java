@@ -18,6 +18,7 @@ import org.apache.spark.broadcast.Broadcast;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.storage.StorageLevel;
 import org.apache.spark.util.AccumulatorV2;
 import scala.Tuple2;
 
@@ -41,26 +42,33 @@ public class UserVisitSessionAnalyzeSpark {
     public static void main(String[] args) {
         args = new String[] {"2"};
 
-        SparkSession spark = getSparkSession();
+        SparkSession spark = SparkUtils.getSparkSession(Constants.SPARK_APP_NAME_SESSION);
 
         //生成模拟数据
-        mockData(spark);
+        SparkUtils.mockData(spark);
+//        mockData(spark);
 
         //创建需要使用的DAO组件
         ITaskDAO taskDAO = DAOFactory.getTaskDAO();
 
         //session粒度数据聚合, 首先从user_visit_action表中, 查询出来指定日期范围类的数据
         //首先得查询出来指定的任务
-        long taskid = ParamUtils.getTaskIdFromArgs(args, "spark.local.taskid.session");
+        long taskid = ParamUtils.getTaskIdFromArgs(args, Constants.SPARK_LOCAL_TASKID_SESSION);
 
-        Task task = taskDAO.findById(2);
+        Task task = taskDAO.findById(taskid);
+
+        if (task == null) {
+            System.out.println(new Date() + "Cannot find task with id: " + taskid + " .");
+            return;
+        }
 
         JSONObject taskParams = JSONObject.parseObject(task.getTaskParam());
 
         System.out.println(taskParams.toJSONString());
 
         //根据时间范围得到actionRDD
-        JavaRDD<Row> actionRDD = getActionRDDByDateRange(spark, taskParams);
+//        JavaRDD<Row> actionRDD = getActionRDDByDateRange(spark, taskParams);
+        JavaRDD<Row> actionRDD = SparkUtils.getActionRDDByDateRange(spark, taskParams);
 
         //从actionRDD中抽取sessionid，得到<sessionid, actionRDD>
         JavaPairRDD<String, Row> sessionid2ActionRDD = getSessionid2ActionRDD(actionRDD);
@@ -98,6 +106,7 @@ public class UserVisitSessionAnalyzeSpark {
 
         JavaPairRDD<String, Row> sessionid2DetailRDD = getSessionid2DetailRDD(
                 filteredSessionid2AggrInfoRDD, sessionid2ActionRDD);
+        sessionid2DetailRDD = sessionid2DetailRDD.persist(StorageLevel.MEMORY_ONLY());
 
         List<Tuple2<CategorySortKey, String>> top10CategoryList =
                 getTop10Category(task.getTaskId(), sessionid2DetailRDD);
@@ -115,7 +124,7 @@ public class UserVisitSessionAnalyzeSpark {
      * 生产环境支持hive表
      * @return
      */
-    private static SparkSession getSparkSession() {
+    /*private static SparkSession getSparkSession() {
         boolean local = Configuration.getBoolean(Constants.SPARK_LOCAL);
         SparkSession spark = null;
         SparkConf conf = new SparkConf()
@@ -136,18 +145,18 @@ public class UserVisitSessionAnalyzeSpark {
                     .getOrCreate();
         }
         return spark;
-    }
+    }*/
 
     /**
      * 生成模拟数据(只有本地模式才会生成模拟数据)
      * @param spark
      */
-    private static void mockData(SparkSession spark) {
+/*    private static void mockData(SparkSession spark) {
         boolean local = Configuration.getBoolean(Constants.SPARK_LOCAL);
         if (local) {
             MockData.mockData(spark);
         }
-    }
+    }*/
 
     /**
      * 根据起始日期得到ActionRDD
@@ -155,7 +164,7 @@ public class UserVisitSessionAnalyzeSpark {
      * @param taskParams
      * @return
      */
-    private static JavaRDD<Row> getActionRDDByDateRange(SparkSession spark, JSONObject taskParams) {
+/*    private static JavaRDD<Row> getActionRDDByDateRange(SparkSession spark, JSONObject taskParams) {
 
         String startDate = ParamUtils.getParam(taskParams, Constants.PARAM_START_DATE);
         String endDate = ParamUtils.getParam(taskParams, Constants.PARAM_END_DATE);
@@ -167,8 +176,13 @@ public class UserVisitSessionAnalyzeSpark {
 
         Dataset<Row> df = spark.sql(sql);
 
+        *//**
+         * spark SQL的第一个stage的partition很少，所以使用repartition来重分区
+         *//*
+//        return df.javaRDD().repartition(1000);
+
         return df.javaRDD();
-    }
+    }*/
 
     /**
      * 得到sessionid2ActionRDD
@@ -176,11 +190,26 @@ public class UserVisitSessionAnalyzeSpark {
      * @return
      */
     private static JavaPairRDD<String, Row> getSessionid2ActionRDD(JavaRDD<Row> actionRDD) {
-        return actionRDD.mapToPair(
-                new PairFunction<Row, String, Row>() {
+//        return actionRDD.mapToPair(
+//                new PairFunction<Row, String, Row>() {
+//                    @Override
+//                    public Tuple2<String, Row> call(Row row) throws Exception {
+//                        return new Tuple2<String, Row>(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID), row);
+//                    }
+//                });
+
+        return actionRDD.mapPartitionsToPair(
+                new PairFlatMapFunction<Iterator<Row>, String, Row>() {
                     @Override
-                    public Tuple2<String, Row> call(Row row) throws Exception {
-                        return new Tuple2<String, Row>(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID), row);
+                    public Iterator<Tuple2<String, Row>> call(Iterator<Row> iterator) throws Exception {
+                        List<Tuple2<String, Row>> list = new ArrayList<Tuple2<String, Row>>();
+
+                        while (iterator.hasNext()) {
+                            Row row = iterator.next();
+                            list.add(new Tuple2<>(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID), row));
+                        }
+
+                        return list.iterator();
                     }
                 });
     }
@@ -317,8 +346,12 @@ public class UserVisitSessionAnalyzeSpark {
             }
         });
 
+        /**
+         * 这里的join就可以把reduce join转换为map join
+         */
         //将session粒度聚合数据，与用户信息进行join
-        JavaPairRDD<Long, Tuple2<String, Row>> userid2FullInfoRDD = userid2PartAggrInfoRDD.join(userid2InfoRDD);
+        JavaPairRDD<Long, Tuple2<String, Row>> userid2FullInfoRDD =
+                userid2PartAggrInfoRDD.join(userid2InfoRDD);
 
         //对join起来的数据进行拼接
         JavaPairRDD<String, String> sessionid2FullInfoRDD = userid2FullInfoRDD.mapToPair(
@@ -344,6 +377,217 @@ public class UserVisitSessionAnalyzeSpark {
                         return new Tuple2<String, String>(sessionid, fullAggrInfo);
                     }
                 });
+
+        /**
+         * reduce join 转为 map join
+         */
+        /*JavaSparkContext sc = new JavaSparkContext(spark.sparkContext());
+        List<Tuple2<Long, Row>> userInfos = userid2InfoRDD.collect();
+        final Broadcast<List<Tuple2<Long, Row>>> userInfosBroadcast = sc.broadcast(userInfos);
+
+        JavaPairRDD<String, String> tunned = userid2PartAggrInfoRDD.mapToPair(
+                new PairFunction<Tuple2<Long, String>, String, String>() {
+                    @Override
+                    public Tuple2<String, String> call(Tuple2<Long, String> tuple2) throws Exception {
+                        List<Tuple2<Long, Row>> userInfos = userInfosBroadcast.value();
+                        Map<Long, Row> userInfoMap = new HashMap<Long, Row>();
+
+                        for (Tuple2<Long, Row> userInfo : userInfos) {
+                            userInfoMap.put(userInfo._1(), userInfo._2());
+                        }
+
+                        //得到当前用户相应信息
+                        String partAggrInfo = tuple2._2;
+                        Row userInfoRow = userInfoMap.get(tuple2._1());
+
+                        String sessionid = StringUtils.getFieldFromConcatString(partAggrInfo, "\\|", Constants.FIELD_SESSION_ID);
+
+                        int age = userInfoRow.getInt(3);
+                        String professional = userInfoRow.getString(4);
+                        String city = userInfoRow.getString(5);
+                        String sex = userInfoRow.getString(6);
+
+                        String fullAggrInfo = partAggrInfo + "|" +
+                                Constants.FIELD_AGE + "=" + age + "|" +
+                                Constants.FIELD_PROFESSIONAL + "=" + professional + "|" +
+                                Constants.FIELD_CITY + "=" + city + "|" +
+                                Constants.FIELD_SEX + "+" + sex + "|";
+
+                        return new Tuple2<String, String>(sessionid, fullAggrInfo);
+                    }
+                });*/
+
+        /**
+         * sample采样倾斜key单独进行join
+         */
+        /*JavaPairRDD<Long, String> sampledRDD = userid2PartAggrInfoRDD.sample(false, 0.1, 9);
+
+        JavaPairRDD<Long, Long> mappedSampledRDD = sampledRDD.mapToPair(
+                new PairFunction<Tuple2<Long, String>, Long, Long>() {
+                    @Override
+                    public Tuple2<Long, Long> call(Tuple2<Long, String> tuple2) throws Exception {
+                        return new Tuple2<Long, Long>(tuple2._1, 1L);
+                    }
+                });
+
+        JavaPairRDD<Long, Long> computedSampledRDD = mappedSampledRDD.reduceByKey(
+                new Function2<Long, Long, Long>() {
+                    @Override
+                    public Long call(Long v1, Long v2) throws Exception {
+                        return v1 + v2;
+                    }
+                });
+
+        JavaPairRDD<Long, Long> reversedSampledRDD = computedSampledRDD.mapToPair(
+                new PairFunction<Tuple2<Long, Long>, Long, Long>() {
+                    @Override
+                    public Tuple2<Long, Long> call(Tuple2<Long, Long> tuple2) throws Exception {
+                        return new Tuple2<Long, Long>(tuple2._2, tuple2._1);
+                    }
+                });
+
+        final Long skewedUserid = reversedSampledRDD.sortByKey(false).take(1).get(0)._2;
+
+        JavaPairRDD<Long, String> skewedRDD = userid2PartAggrInfoRDD.filter(
+                new Function<Tuple2<Long, String>, Boolean>() {
+                    @Override
+                    public Boolean call(Tuple2<Long, String> tuple2) throws Exception {
+                        return tuple2._1.equals(skewedUserid);
+                    }
+                });
+
+        JavaPairRDD<Long, String> commonRDD = userid2PartAggrInfoRDD.filter(
+                new Function<Tuple2<Long, String>, Boolean>() {
+                    @Override
+                    public Boolean call(Tuple2<Long, String> tuple2) throws Exception {
+                        return !tuple2._1.equals(skewedUserid);
+                    }
+                });
+
+        *//**
+         * 下面两步操作是改良版
+         *//*
+        JavaPairRDD<String, Row> skewedUserid2InfoRDD = userid2InfoRDD.filter(
+                new Function<Tuple2<Long, Row>, Boolean>() {
+                    @Override
+                    public Boolean call(Tuple2<Long, Row> tuple2) throws Exception {
+                        return tuple2._1.equals(skewedUserid);
+                    }
+                })
+                .flatMapToPair(new PairFlatMapFunction<Tuple2<Long, Row>, String, Row>() {
+                    @Override
+                    public Iterator<Tuple2<String, Row>> call(Tuple2<Long, Row> tuple2) throws Exception {
+                        Random random = new Random();
+                        List<Tuple2<String, Row>> list = new ArrayList<Tuple2<String, Row>>();
+
+                        for (int i = 0; i < 100; i++) {
+                            int prefix = random.nextInt(100);
+                            list.add(new Tuple2<>(prefix + "_" + tuple2._1, tuple2._2));
+                        }
+
+                        return list.iterator();
+                    }
+                });
+
+        JavaPairRDD<Long, Tuple2<String, Row>> joinedRDD1 = skewedRDD.mapToPair(
+                new PairFunction<Tuple2<Long, String>, String, String>() {
+                    @Override
+                    public Tuple2<String, String> call(Tuple2<Long, String> tuple2) throws Exception {
+                        Random random = new Random();
+                        int prefix = random.nextInt(100);
+
+                        return new Tuple2<String, String>(prefix + "_" + tuple2._1, tuple2._2);
+                    }
+                })
+                .join(skewedUserid2InfoRDD)
+                .mapToPair(
+                        new PairFunction<Tuple2<String, Tuple2<String, Row>>, Long, Tuple2<String, Row>>() {
+                            @Override
+                            public Tuple2<Long, Tuple2<String, Row>> call(Tuple2<String, Tuple2<String, Row>> tuple2) throws Exception {
+                                Long userid = Long.valueOf(tuple2._1.split("_")[1]);
+                                return new Tuple2<Long, Tuple2<String, Row>>(userid, tuple2._2);
+                            }
+                        });
+
+        JavaPairRDD<Long, Tuple2<String, Row>> joinedRDD2 = commonRDD.join(userid2InfoRDD);
+
+        JavaPairRDD<Long, Tuple2<String, Row>> joinedRDD = joinedRDD1.union(joinedRDD2);
+
+        JavaPairRDD<String, String> finalRDD = joinedRDD.mapToPair(
+                new PairFunction<Tuple2<Long, Tuple2<String, Row>>, String, String>() {
+                    @Override
+                    public Tuple2<String, String> call(Tuple2<Long, Tuple2<String, Row>> tuple) throws Exception {
+                        String partAggrInfo = tuple._2._1;
+                        Row userInfoRow = tuple._2._2;
+
+                        String sessionid = StringUtils.getFieldFromConcatString(partAggrInfo, "\\|", Constants.FIELD_SESSION_ID);
+
+                        int age = userInfoRow.getInt(3);
+                        String professional = userInfoRow.getString(4);
+                        String city = userInfoRow.getString(5);
+                        String sex = userInfoRow.getString(6);
+
+                        String fullAggrInfo = partAggrInfo + "|" +
+                                Constants.FIELD_AGE + "=" + age + "|" +
+                                Constants.FIELD_PROFESSIONAL + "=" + professional + "|" +
+                                Constants.FIELD_CITY + "=" + city + "|" +
+                                Constants.FIELD_SEX + "+" + sex + "|";
+
+                        return new Tuple2<String, String>(sessionid, fullAggrInfo);
+                    }
+                });*/
+
+        /**
+         * 使用随机数和扩容表
+         */
+        /*JavaPairRDD<String, Row> expandedRDD = userid2InfoRDD.flatMapToPair(
+                new PairFlatMapFunction<Tuple2<Long, Row>, String, Row>() {
+                    @Override
+                    public Iterator<Tuple2<String, Row>> call(Tuple2<Long, Row> tuple2) throws Exception {
+                        List<Tuple2<String, Row>> list = new ArrayList<Tuple2<String, Row>>();
+                        for (int i = 0; i < 10; i++) {
+                            list.add(new Tuple2<>(i + "_" + tuple2._1, tuple2._2));
+                        }
+                        return list.iterator();
+                    }
+                });
+
+        JavaPairRDD<String, String> mappedUserid2PartAggrInfoRDD = userid2PartAggrInfoRDD.mapToPair(
+                new PairFunction<Tuple2<Long, String>, String, String>() {
+                    @Override
+                    public Tuple2<String, String> call(Tuple2<Long, String> tuple2) throws Exception {
+                        Random random = new Random();
+                        int prefix = random.nextInt(10);
+                        return new Tuple2<String, String>(prefix + "_" + tuple2._1, tuple2._2);
+                    }
+                });
+
+        JavaPairRDD<String, Tuple2<String, Row>> joinedRDD = mappedUserid2PartAggrInfoRDD.join(expandedRDD);
+
+        JavaPairRDD<String, String> finalRDD = joinedRDD.mapToPair(
+                new PairFunction<Tuple2<String, Tuple2<String, Row>>, String, String>() {
+                    @Override
+                    public Tuple2<String, String> call(Tuple2<String, Tuple2<String, Row>> tuple) throws Exception {
+                        String partAggrInfo = tuple._2._1;
+                        Row userInfoRow = tuple._2._2;
+
+                        String sessionid = StringUtils.getFieldFromConcatString(partAggrInfo, "\\|", Constants.FIELD_SESSION_ID);
+
+                        int age = userInfoRow.getInt(3);
+                        String professional = userInfoRow.getString(4);
+                        String city = userInfoRow.getString(5);
+                        String sex = userInfoRow.getString(6);
+
+                        String fullAggrInfo = partAggrInfo + "|" +
+                                Constants.FIELD_AGE + "=" + age + "|" +
+                                Constants.FIELD_PROFESSIONAL + "=" + professional + "|" +
+                                Constants.FIELD_CITY + "=" + city + "|" +
+                                Constants.FIELD_SEX + "+" + sex + "|";
+
+                        return new Tuple2<String, String>(sessionid, fullAggrInfo);
+                    }
+                });*/
+
 
         return sessionid2FullInfoRDD;
     }
@@ -505,9 +749,9 @@ public class UserVisitSessionAnalyzeSpark {
                     @Override
                     public Tuple2<String, String> call(Tuple2<String, String> tuple2) throws Exception {
                         String aggrInfo = tuple2._2;
-                        System.out.println("randomExtractSession aggrInfo: " + aggrInfo);
+                        //System.out.println("randomExtractSession aggrInfo: " + aggrInfo);
                         String startTime = StringUtils.getFieldFromConcatString(aggrInfo, "\\|", Constants.FIELD_START_TIME);
-                        System.out.println("randomExtractSession startTime" + startTime);
+                        //System.out.println("randomExtractSession startTime" + startTime);
                         String dateHour = DateUtils.getDateHour(startTime);
 
                         return new Tuple2<String, String>(dateHour, aggrInfo);
@@ -956,6 +1200,10 @@ public class UserVisitSessionAnalyzeSpark {
     private static JavaPairRDD<Long, Long> getClickCategoryId2CountRDD(JavaPairRDD<String, Row> sessionid2DetailRDD) {
 
         //过滤
+        /**
+         * 因为过滤出来的点击行为很少，所以过滤后每个paitition中的数据量很不均匀，而且很少
+         * 所以可以使用coalesce
+         */
         JavaPairRDD<String, Row> clickActionRDD = sessionid2DetailRDD.filter(
                 new Function<Tuple2<String, Row>, Boolean>() {
                     @Override
@@ -964,8 +1212,9 @@ public class UserVisitSessionAnalyzeSpark {
                         boolean flag = row.get(Constants.USER_VISIT_ACTION_CLICK_CATEGORY_ID) != null ? true : false;
                         return flag;
                     }
-                });
-
+                })
+//                .coalesce(100)
+                ;
 
         JavaPairRDD<Long, Long> clickCategoryIdRDD = clickActionRDD.mapToPair(
                 new PairFunction<Tuple2<String, Row>, Long, Long>() {
@@ -976,6 +1225,7 @@ public class UserVisitSessionAnalyzeSpark {
                     }
                 });
 
+
         JavaPairRDD<Long, Long> clickCategoryId2CountRDD = clickCategoryIdRDD.reduceByKey(
                 new Function2<Long, Long, Long>() {
                     @Override
@@ -983,6 +1233,49 @@ public class UserVisitSessionAnalyzeSpark {
                         return v1 + v2;
                     }
                 });
+
+
+
+        //给每个key打一个随机数
+        JavaPairRDD<String, Long> mappedClickCategoryIdRDD = clickCategoryIdRDD.mapToPair(
+                new PairFunction<Tuple2<Long, Long>, String, Long>() {
+                    @Override
+                    public Tuple2<String, Long> call(Tuple2<Long, Long> tuple2) throws Exception {
+                        Random random = new Random();
+                        int prefix = random.nextInt(10);
+
+                        return new Tuple2<String, Long>(prefix + "_" + tuple2._1, tuple2._2);
+                    }
+                });
+        /**
+         * 下面是为了防止数据倾斜做的优化
+         */
+        /*//执行第一轮聚合
+        JavaPairRDD<String, Long> firstAggrRDD = mappedClickCategoryIdRDD.reduceByKey(
+                new Function2<Long, Long, Long>() {
+                    @Override
+                    public Long call(Long v1, Long v2) throws Exception {
+                        return v1 + v2;
+                    }
+                });
+        //去除每个key的前缀
+        JavaPairRDD<Long, Long> restoredRDD = firstAggrRDD.mapToPair(
+                new PairFunction<Tuple2<String, Long>, Long, Long>() {
+                    @Override
+                    public Tuple2<Long, Long> call(Tuple2<String, Long> tuple2) throws Exception {
+                        Long categoryId = Long.valueOf(tuple2._1.split("_")[1]);
+                        return new Tuple2<Long, Long>(categoryId, tuple2._2);
+                    }
+                });
+
+        //第二轮全局整合
+        JavaPairRDD<String, Long> globalAggrRDD = mappedClickCategoryIdRDD.reduceByKey(
+                new Function2<Long, Long, Long>() {
+                    @Override
+                    public Long call(Long v1, Long v2) throws Exception {
+                        return v1 + v2;
+                    }
+                });*/
 
         return clickCategoryId2CountRDD;
     }
@@ -1298,39 +1591,74 @@ public class UserVisitSessionAnalyzeSpark {
         JavaPairRDD<String, Tuple2<String, Row>> sessionDetailRDD =
                 top10SessionRDD.join(sessionid2DetailRDD);
 
-        sessionDetailRDD.foreach(
-                new VoidFunction<Tuple2<String, Tuple2<String, Row>>>() {
+//        sessionDetailRDD.foreach(
+//                new VoidFunction<Tuple2<String, Tuple2<String, Row>>>() {
+//                    @Override
+//                    public void call(Tuple2<String, Tuple2<String, Row>> tuple2) throws Exception {
+//                        Row row = tuple2._2._2;
+//
+//                        SessionDetail sessionDetail = new SessionDetail();
+//                        sessionDetail.setTaskid(taskId);
+//                        try {
+//                            sessionDetail.setUserid(row.getLong(Constants.USER_VISIT_ACTION_USER_ID));
+//                            sessionDetail.setSessionid(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID));
+//                            sessionDetail.setPageid(row.getLong(Constants.USER_VISIT_ACTION_PAGE_ID));
+//                            sessionDetail.setActionTime(row.getString(Constants.USER_VISIT_ACTION_ACTION_TIME));
+//                            sessionDetail.setSearchKeywords(row.getString(Constants.USER_VISIT_ACTION_SEARCH_KEYWORD));
+//                            sessionDetail.setClickCategoryId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_CATEGORY_ID));
+//                            sessionDetail.setClickProductId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_PRODUCT_ID));
+//                            sessionDetail.setOrderCategoryIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_CATEGORY_IDS));
+//                            sessionDetail.setOrderProductIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_PRODUCT_IDS));
+//                            sessionDetail.setPayCategoryIds(row.getString(Constants.USER_VISIT_ACTION_PAY_CATEGORY_IDS));
+//                            sessionDetail.setPayProductIds(row.getString(Constants.USER_VISIT_ACTION_PAY_PRODUCT_IDS));
+//                        } catch (Exception e) {
+//
+//                        }
+//
+//                        ISessionDetailDAO sessionDetailDAO = DAOFactory.getSessionDetailDAO();
+//                        sessionDetailDAO.insert(sessionDetail);
+//                    }
+//                });
+
+        sessionDetailRDD.foreachPartition(
+                new VoidFunction<Iterator<Tuple2<String, Tuple2<String, Row>>>>() {
                     @Override
-                    public void call(Tuple2<String, Tuple2<String, Row>> tuple2) throws Exception {
-                        Row row = tuple2._2._2;
+                    public void call(Iterator<Tuple2<String, Tuple2<String, Row>>> iterator) throws Exception {
+                        List<SessionDetail> sessionDetails = new ArrayList<SessionDetail>();
 
-                        SessionDetail sessionDetail = new SessionDetail();
-                        sessionDetail.setTaskid(taskId);
-                        try {
-                            sessionDetail.setUserid(row.getLong(Constants.USER_VISIT_ACTION_USER_ID));
-                            sessionDetail.setSessionid(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID));
-                            sessionDetail.setPageid(row.getLong(Constants.USER_VISIT_ACTION_PAGE_ID));
-                            sessionDetail.setActionTime(row.getString(Constants.USER_VISIT_ACTION_ACTION_TIME));
-                            sessionDetail.setSearchKeywords(row.getString(Constants.USER_VISIT_ACTION_SEARCH_KEYWORD));
-                            sessionDetail.setClickCategoryId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_CATEGORY_ID));
-                            sessionDetail.setClickProductId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_PRODUCT_ID));
-                            sessionDetail.setOrderCategoryIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_CATEGORY_IDS));
-                            sessionDetail.setOrderProductIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_PRODUCT_IDS));
-                            sessionDetail.setPayCategoryIds(row.getString(Constants.USER_VISIT_ACTION_PAY_CATEGORY_IDS));
-                            sessionDetail.setPayProductIds(row.getString(Constants.USER_VISIT_ACTION_PAY_PRODUCT_IDS));
-                        } catch (Exception e) {
+                        while (iterator.hasNext()) {
+                            Tuple2<String, Tuple2<String, Row>> tuple2 = iterator.next();
 
+                            Row row = tuple2._2._2;
+
+                            SessionDetail sessionDetail = new SessionDetail();
+                            sessionDetail.setTaskid(taskId);
+
+                            try {
+                                sessionDetail.setUserid(row.getLong(Constants.USER_VISIT_ACTION_USER_ID));
+                                sessionDetail.setSessionid(row.getString(Constants.USER_VISIT_ACTION_SESSION_ID));
+                                sessionDetail.setPageid(row.getLong(Constants.USER_VISIT_ACTION_PAGE_ID));
+                                sessionDetail.setActionTime(row.getString(Constants.USER_VISIT_ACTION_ACTION_TIME));
+                                sessionDetail.setSearchKeywords(row.getString(Constants.USER_VISIT_ACTION_SEARCH_KEYWORD));
+                                sessionDetail.setClickCategoryId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_CATEGORY_ID));
+                                sessionDetail.setClickProductId(row.getLong(Constants.USER_VISIT_ACTION_CLICK_PRODUCT_ID));
+                                sessionDetail.setOrderCategoryIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_CATEGORY_IDS));
+                                sessionDetail.setOrderProductIds(row.getString(Constants.USER_VISIT_ACTION_ORDER_PRODUCT_IDS));
+                                sessionDetail.setPayCategoryIds(row.getString(Constants.USER_VISIT_ACTION_PAY_CATEGORY_IDS));
+                                sessionDetail.setPayProductIds(row.getString(Constants.USER_VISIT_ACTION_PAY_PRODUCT_IDS));
+                            } catch (Exception e) {
+
+                            }
+
+                            sessionDetails.add(sessionDetail);
+
+                            ISessionDetailDAO sessionDetailDAO = DAOFactory.getSessionDetailDAO();
+                            sessionDetailDAO.insertBatch(sessionDetails);
                         }
 
-                        ISessionDetailDAO sessionDetailDAO = DAOFactory.getSessionDetailDAO();
-                        sessionDetailDAO.insert(sessionDetail);
+
                     }
                 });
-
-
-
-
-
 
     }
 
