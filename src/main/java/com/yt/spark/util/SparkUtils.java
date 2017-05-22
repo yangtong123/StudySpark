@@ -33,6 +33,7 @@ public class SparkUtils {
                     .builder()
                     .master("local")
                     .appName(appName)
+                    .enableHiveSupport()
                     .getOrCreate();
         } else {
             spark = SparkSession.builder()

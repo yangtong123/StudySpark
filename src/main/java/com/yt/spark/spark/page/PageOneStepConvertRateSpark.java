@@ -72,6 +72,9 @@ public class PageOneStepConvertRateSpark {
 
         //持久化
         persistConvertRate(taskid, convertRateMap);
+
+
+        spark.close();
     }
 
 

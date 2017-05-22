@@ -44,12 +44,23 @@ public class JDBCHelper {
     private JDBCHelper() {
         int datasourceSize = Configuration.getInteger(Constants.JDBC_DATASOURCE_SIZE);
 
+        boolean local = Configuration.getBoolean(Constants.SPARK_LOCAL);
+        String url = null;
+        String user = null;
+        String password = null;
+
+        if (local) {
+            url = Configuration.getProperty(Constants.JDBC_URL);
+            user = Configuration.getProperty(Constants.JDBC_USER);
+            password = Configuration.getProperty(Constants.JDBC_PASSWORD);
+        } else {
+            url = Configuration.getProperty(Constants.JDBC_URL_PROD);
+            user = Configuration.getProperty(Constants.JDBC_USER_PROD);
+            password = Configuration.getProperty(Constants.JDBC_PASSWORD_PROD);
+        }
+
         //创建指定数量的数据库连接，并放入数据库连接池中
         for (int i = 0; i < datasourceSize; i++) {
-            String url = Configuration.getProperty(Constants.JDBC_URL);
-            String user = Configuration.getProperty(Constants.JDBC_USER);
-            String password = Configuration.getProperty(Constants.JDBC_PASSWORD);
-
             try {
                 Connection conn = DriverManager.getConnection(url, user, password);
                 datasources.push(conn);

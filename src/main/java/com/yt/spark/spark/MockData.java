@@ -67,6 +67,7 @@ public class MockData {
                             break;
                     }
 
+
                     Row row = RowFactory.create(date, userid, sessionid, pageid, actionTime, searchKeyword,
                             clickCategoryId, clickProductId, orderCategoryIds, orderProductIds,
                             payCategoryIds, payProductIds, Long.valueOf(String.valueOf(random.nextInt(10))));
@@ -96,6 +97,7 @@ public class MockData {
         Dataset<Row> df = spark.createDataFrame(rows, schema);
 
         df.createOrReplaceTempView("user_visit_action");
+//        df.write().saveAsTable("user_visit_action");
         df.takeAsList(1).forEach(System.out::println);
 
         /**
@@ -128,6 +130,7 @@ public class MockData {
         Dataset<Row> df2 = spark.createDataFrame(rows,schema2);
 
         df2.createOrReplaceTempView("user_info");
+//        df2.write().saveAsTable("user_info");
         df2.toDF().takeAsList(1).forEach(System.out::println);
 
         /**
@@ -154,6 +157,7 @@ public class MockData {
         Dataset<Row> df3 = spark.createDataFrame(rows, schema3);
 
         df3.createOrReplaceTempView("product_info");
+//        df3.write().saveAsTable("product_info");
         df3.toDF().takeAsList(1).forEach(System.out::println);
 
     }
