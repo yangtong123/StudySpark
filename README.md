@@ -1,6 +1,42 @@
 # StudySpark
 spark的一个小项目
 
+## 2017-05-22 spark streaming HA高可用
+
+### 1. 设置checkpoint
+
+设置checkpoint的作用时，当出错或数据丢失时，spark程序不至于重新计算，可以从checkpoint中读取数据
+
+对于updateStateByKey window等有状态的操作，自动进行checkpoint，必须要设置checkpoint目录
+
+`SparkStreaming.checkpoint("hdfs://spark01:9090/checkpoint")`
+
+### 2. Driver高可用性
+
+通过调用getOrCreate的getOrCreate方法，第一个参数是设置的checkpoint目录，第二个参数是匿名内部类用来创建streamingcontext。  
+高可用体现在，如果checkpoint中没有数据，那么就执行匿名内部类中的方法创建streamingcontext，如果checkpoint中有数据，那么就从里边恢复streamingcontext
+
+``` java
+def getOrCreate(
+      checkpointPath: String,  
+      creatingFunc: JFunction0[JavaStreamingContext]
+    ): JavaStreamingContext = {
+    val ssc = StreamingContext.getOrCreate(checkpointPath, () => {
+      creatingFunc.call().ssc
+    })
+    new JavaStreamingContext(ssc)
+  }
+
+```
+这种的提交方式是
+--deploy-mode cluster  
+--supervise
+
+### 3. 实现RDD的高可用：启动WAL预写日志
+
+`spark.streaming.receiver.writeAheadLog.enable true`
+
+
 ## 2017-05-21 spark sql数据倾斜的学习
 
 ### 1. 聚合源数据和spark core没有区别
