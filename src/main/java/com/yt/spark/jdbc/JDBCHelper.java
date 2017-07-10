@@ -103,8 +103,10 @@ public class JDBCHelper {
             conn = getConnection();
             pstmt = conn.prepareStatement(sql);
 
-            for (int i = 0; i < params.length; i++) {
-                pstmt.setObject(i+1, params[i]);
+            if (params != null && params.length > 0) {
+                for (int i = 0; i < params.length; i++) {
+                    pstmt.setObject(i+1, params[i]);
+                }
             }
 
             rtn = pstmt.executeUpdate();
@@ -134,8 +136,10 @@ public class JDBCHelper {
             conn = getConnection();
             pstmt = conn.prepareStatement(sql);
 
-            for (int i = 0; i < params.length; i++) {
-                pstmt.setObject(i+1, params[i]);
+            if (params != null && params.length > 0) {
+                for (int i = 0; i < params.length; i++) {
+                    pstmt.setObject(i+1, params[i]);
+                }
             }
 
             rs = pstmt.executeQuery();
@@ -168,12 +172,14 @@ public class JDBCHelper {
             conn.setAutoCommit(false);
             pstmt = conn.prepareStatement(sql);
 
-            //2.使用PreparedStatement.addBatch()方法加入批量sql操作
-            for (Object[] params : paramsList) {
-                for (int i = 0; i < params.length; i++) {
-                    pstmt.setObject(i+1, params[i]);
+            if (paramsList != null && paramsList.size() > 0) {
+                //2.使用PreparedStatement.addBatch()方法加入批量sql操作
+                for (Object[] params : paramsList) {
+                    for (int i = 0; i < params.length; i++) {
+                        pstmt.setObject(i+1, params[i]);
+                    }
+                    pstmt.addBatch();
                 }
-                pstmt.addBatch();
             }
 
             //3.使用PreparedStatement.executeBatch()执行批量

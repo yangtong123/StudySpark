@@ -18,7 +18,6 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.streaming.Durations;
-import org.apache.spark.streaming.StreamingContext;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaPairInputDStream;
@@ -45,7 +44,7 @@ public class AdClickRealTimeStatSpark {
 
         // 构建kafka参数map, 地址
         Map<String, String> kafkaParams = new HashMap<>();
-        kafkaParams.put(Constants.KAFKA_METADATA_BROKER_LIST,
+        kafkaParams.put("metadata.broker.list",
                 Configuration.getProperty(Constants.KAFKA_METADATA_BROKER_LIST));
 
         // 构建topic set
