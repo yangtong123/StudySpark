@@ -45,37 +45,62 @@ spark的一个小项目以及笔记
 
 
 ## 项目内容
-1. 用户访问session分析模块
-
-代码：[UserVisitSessionAnalyzeSpark](./src/main/java/com/yt/spark/spark/session/UserVisitSessionAnalyzeSpark.java)  
+1. **用户访问session分析模块**
 
 * 用户访问session分析业务，session聚合统计、session随机抽取、top10热门分类、top10活跃用户  
+    > 1、按条件筛选session  
+      2、统计出符合条件的session中，访问时长在1s~3s、4s~6s、7s~9s、10s~30s、30s~60s、1m~3m、3m~10m、10m~30m、30m以上各个范围内的session占比；访问步长在1~3、4~6、7~9、10~30、30~60、60以上各个范围内的session占比  
+      3、在符合条件的session中，按照时间比例随机抽取1000个session  
+      4、在符合条件的session中，获取点击、下单和支付数量排名前10的品类  
+      5、对于排名前10的品类，分别获取其点击次数排名前10的session  
+
 * 技术点：数据的过滤与聚合、自定义Accumulator、按时间比例随机抽取算法、二次排序、分组取topN  
 * 性能调优方案：普通调优、jvm调优、shuffle调优、算子调优  
 * troubleshooting经验  
 * 数据倾斜解决方案：7种方案  
 
-2. 页面单跳转化率模块
+代码：[UserVisitSessionAnalyzeSpark](./src/main/java/com/yt/spark/spark/session/UserVisitSessionAnalyzeSpark.java)  
+
+2. **页面单跳转化率模块**
+
+* 页面单跳转化率模块业务
+   > 1、获取任务的日期范围参数  
+     2、查询指定日期范围内的用户访问行为数据  
+     3、获取用户访问行为中，每个session，计算出各个在指定页面流中的页面切片的访问量；实现，页面单跳切片生成以及页面流匹配的算法；session，3->8->7，3->5->7，是不匹配的；  
+     4、计算出符合页面流的各个切片的pv（访问量）  
+     5、针对用户指定的页面流，去计算各个页面单跳切片的转化率  
+     6、将计算结果持久化到数据库中  
 
 代码：[PageOneStepConvertRateSpark](./src/main/java/com/yt/spark/spark/page/PageOneStepConvertRateSpark.java)
 
-3. 各区域热门商品统计模块
+3. **各区域热门商品统计模块**
 
-代码：[AreaTop3ProductSpark](./src/main/java/com/yt/spark/spark/produce/AreaTop3ProductSpark.java)
+* 各区域热门商品统计模块业务
+   > 根据用户指定的日期范围，统计各个区域下的最热门的top3商品
 
 * 技术点：Hive与MySQL异构数据源、RDD转换为DataFrame、注册和使用临时表、自定义UDAF聚合函数、自定义get_json_object等普通函数、Spark SQL的高级内置函数（if与case when等）、开窗函数（高端）  
 * Spark SQL数据倾斜解决方案
 
+代码：[AreaTop3ProductSpark](./src/main/java/com/yt/spark/spark/produce/AreaTop3ProductSpark.java)
 
-4. 广告流量实时统计模块
 
-代码：[AdClickRealTimeStatSpark](./src/main/java/com/yt/spark/spark/ad/AdClickRealTimeStatSpark.java)
+4. **广告流量实时统计模块**
+
+* 广告流量实时统计模块业务
+   > 1、实现实时的动态黑名单机制：将每天对某个广告点击超过100次的用户拉黑  
+     2、基于黑名单的非法广告点击流量过滤机制：  
+     3、每天各省各城市各广告的点击流量实时统计：  
+     4、统计每天各省top3热门广告  
+     5、统计各广告最近1小时内的点击量趋势：各广告最近1小时内各分钟的点击量  
+     6、使用高性能方式将实时统计结果写入MySQL  
+     7、实现实时计算程序的HA高可用性（Spark Streaming HA方案）  
+     8、实现实时计算程序的性能调优（Spark Streaming Performence Tuning方案）  
 
 * 技术点：动态黑名单机制（动态生成黑名单以及黑名单过滤）、transform、updateStateByKey、transform与Spark SQL整合、window滑动窗口、高性能写数据库  
 * HA方案：高可用性方案，3种  
 * 性能调优：常用的性能调优的技巧
 
-
+代码：[AdClickRealTimeStatSpark](./src/main/java/com/yt/spark/spark/ad/AdClickRealTimeStatSpark.java)
 
 
 ## 学习笔记
