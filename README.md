@@ -1,26 +1,79 @@
 # StudySpark
-spark的一个小项目
+spark的一个小项目以及笔记
+
+# 目录
+
+* [项目内容](#项目内容)
+* [学习笔记](#学习笔记)
+    * [一些操作](#一些操作)
+    * [性能调优](#性能调优还有这种操作boom)
+        * [调节并行度](#调节并行度)
+        * [重构RDD与持久化](#重构rdd与持久化)
+        * [广播大变量](#广播大变量)
+        * [使用Kryo序列化](#使用kryo序列化)
+        * [使用fastutil优化数据格式](#使用fastutil优化数据格式)
+        * [调节数据本地化等待时长](#调节数据本地化等待时长)
+        * [JVM调优之降低cache操作的内存占比](#jvm调优之降低cache操作的内存占比)
+        * [JVM调优之调节Executor堆外内存与连接等待时长](#jvm调优之调节executor堆外内存与连接等待时长)
+    * [Shuffle调优](#shuffle调优)
+        * [调节Map端内存缓冲与Reduce端内存占比](#调节map端内存缓冲与reduce端内存占比)
+        * [spark.shuffle.sort.bypassMergeThreshold](#sparkshufflesortbypassmergeyhreshold)
+    * [算子调优](#算子调优)
+        * [map与mapPartitions](#map与mappartitions)
+        * [filter过后使用coalesce](#filter过后使用coalesce)
+        * [foreachPartition优化写数据库](#foreachpartition优化写数据库)
+        * [repartition解决Spark SQL并行度过低](#repartition解决spark-sql并行度过低)
+        * [reduceByKey的Map端本地聚合](#reducebykey的map端本地聚合)
+    * [troubleShooting](#troubleshooting)
+        * [控制shuffle reduce端缓冲大小以避免OOM](#控制shuffle-reduce端缓冲大小以避免oom)
+        * [JVM GC导致shuffle文件拉取失败](#jvm-gc导致shuffle文件拉取失败)
+        * [Yarn队列资源不足导致Application直接失败](#yarn队列资源不足导致application直接失败)
+        * [各种序列化导致的报错](#各种序列化导致的报错)
+        * [算子函数返回NULL导致的问题](#算子函数返回null导致的问题)
+        * [Yarn-cluster模式JVM内存溢出无法执行](#yarn-cluster模式jvm内存溢出无法执行)
+    * [数据倾斜解决方案](#数据倾斜解决方案)
+        * [聚合源数据](#聚合源数据)
+        * [提高shuffle操作的reduce并行度](#提高shuffle操作的reduce并行度)
+        * [使用随机key实现双重聚合](#使用随机key实现双重聚合)
+        * [将reduce join转为map join](#将reduce-join转为map-join)
+        * [sample采样倾斜key进行两次join](#sample采样倾斜key进行两次join)
+        * [使用随机数以及扩容表进行join](#使用随机数以及扩容表进行join)
+    * [Spark SQL数据倾斜解决方案](#spark-sql数据倾斜解决方案)
+    * [Spark Streaming](#spark-streaming)
+        * [Spark Streaming高可用](#spark-streaming高可用)
+        * [Spark Streaming性能调优](#spark-streaming性能调优)
 
 
-## 用户访问session分析模块
-用户访问session分析业务，session聚合统计、session随机抽取、top10热门分类、top10活跃用户  
-技术点：数据的过滤与聚合、自定义Accumulator、按时间比例随机抽取算法、二次排序、分组取topN  
-性能调优方案：普通调优、jvm调优、shuffle调优、算子调优  
-troubleshooting经验  
-数据倾斜解决方案：7种方案  
+## 项目内容
+1. 用户访问session分析模块
 
-## 页面单跳转化率模块
+代码：[UserVisitSessionAnalyzeSpark](./src/main/java/com/yt/spark/spark/session/UserVisitSessionAnalyzeSpark.java)  
+
+* 用户访问session分析业务，session聚合统计、session随机抽取、top10热门分类、top10活跃用户  
+* 技术点：数据的过滤与聚合、自定义Accumulator、按时间比例随机抽取算法、二次排序、分组取topN  
+* 性能调优方案：普通调优、jvm调优、shuffle调优、算子调优  
+* troubleshooting经验  
+* 数据倾斜解决方案：7种方案  
+
+2. 页面单跳转化率模块
+
+代码：[PageOneStepConvertRateSpark](./src/main/java/com/yt/spark/spark/page/PageOneStepConvertRateSpark.java)
+
+3. 各区域热门商品统计模块
+
+代码：[AreaTop3ProductSpark](./src/main/java/com/yt/spark/spark/produce/AreaTop3ProductSpark.java)
+
+* 技术点：Hive与MySQL异构数据源、RDD转换为DataFrame、注册和使用临时表、自定义UDAF聚合函数、自定义get_json_object等普通函数、Spark SQL的高级内置函数（if与case when等）、开窗函数（高端）  
+* Spark SQL数据倾斜解决方案
 
 
-## 各区域热门商品统计模块
-技术点：Hive与MySQL异构数据源、RDD转换为DataFrame、注册和使用临时表、自定义UDAF聚合函数、自定义get_json_object等普通函数、Spark SQL的高级内置函数（if与case when等）、开窗函数（高端）  
-Spark SQL数据倾斜解决方案
+4. 广告流量实时统计模块
 
+代码：[AdClickRealTimeStatSpark](./src/main/java/com/yt/spark/spark/ad/AdClickRealTimeStatSpark.java)
 
-## 广告流量实时统计模块
-技术点：动态黑名单机制（动态生成黑名单以及黑名单过滤）、transform、updateStateByKey、transform与Spark SQL整合、window滑动窗口、高性能写数据库  
-HA方案：高可用性方案，3种  
-性能调优：常用的性能调优的技巧
+* 技术点：动态黑名单机制（动态生成黑名单以及黑名单过滤）、transform、updateStateByKey、transform与Spark SQL整合、window滑动窗口、高性能写数据库  
+* HA方案：高可用性方案，3种  
+* 性能调优：常用的性能调优的技巧
 
 
 
@@ -49,9 +102,9 @@ HA方案：高可用性方案，3种
 > 假设，现在已经在spark-submit脚本里面，给我们的spark作业分配了足够多的资源，比如50个executor，每个executor有10G内存，每个executor有3个cpu core。基本已经达到了集群或者yarn队列的资源上限。
   但是task没有设置，或者设置的很少，比如就设置了，100个task。50个executor，每个executor有3个cpu core，也就是说，你的Application任何一个stage运行的时候，都有总数在150个cpu core，可以并行运行。但是你现在，只有100个task，平均分配一下，每个executor分配到2个task，ok，那么同时在运行的task，只有100个，每个executor只会并行运行2个task。每个executor剩下的一个cpu core，就浪费掉了。
 
-1. 官方是推荐，task数量，设置成spark application总cpu core数量的2~3倍，比如150个cpu core，基本要设置task数量为300~500
+1. **官方推荐**，task数量设置成spark application总cpu core数量的2~3倍，比如150个cpu core，基本要设置task数量为300~500
 
-2. 如何设置一个Spark Application的并行度 
+2. **如何设置一个Spark Application的并行度** 
 ``` scala
 SparkConf conf = new SparkConf()
   .set("spark.default.parallelism", "500")
@@ -59,13 +112,13 @@ SparkConf conf = new SparkConf()
 
 #### 重构RDD与持久化
 
-1. RDD架构重构与优化
+1. **RDD架构重构与优化**
 尽量去复用RDD，差不多的RDD，可以抽取称为一个共同的RDD，供后面的RDD计算时，反复使用。
 
-2. 公共RDD一定要实现持久化
+2. **公共RDD一定要实现持久化**
 对于要多次计算和使用的公共RDD，一定要进行持久化。
 
-3. 持久化，是可以进行序列化的
+3. **持久化，是可以进行序列化的**
 如果正常将数据持久化在内存中，那么可能会导致内存的占用过大，这样的话，也许，会导致OOM内存溢出。  
 当纯内存无法支撑公共RDD数据完全存放的时候，就优先考虑，使用序列化的方式在纯内存中存储。将RDD的每个partition的数据，序列化成一个大的字节数组，就一个对象；序列化后，大大减少内存的空间占用。  
 如果序列化纯内存方式，还是导致OOM，内存溢出；就只能考虑磁盘的方式，内存+磁盘的普通方式（无序列化）。  
@@ -89,12 +142,12 @@ Kryo序列化机制，一旦启用以后，会生效的几个地方：
 2. 持久化RDD时进行序列化，StorageLevel.MEMORY_ONLY_SER。持久化RDD占用的内存越少，task执行的时候创建的对象，就不至于频繁的占满内存，频繁发生GC。
 3. shuffle：可以优化网络传输的性能
 
-使用Kryo序列化：
+使用Kryo序列化步骤：
 1. SparkConf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
 2. 注册你使用到的，需要通过Kryo序列化的自定义类。SparkConf.registerKryoClasses(new Class[]{CategorySoryKey.class})
 
 #### 使用fastutil优化数据格式
-* fastutil介绍
+* **fastutil介绍**
 > fastutil是扩展了Java标准集合框架（Map、List、Set；HashMap、ArrayList、HashSet）的类库，提供了特殊类型的map、set、list和queue；
   fastutil能够提供更小的内存占用，更快的存取速度；我们使用fastutil提供的集合类，来替代自己平时使用的JDK的原生的Map、List、Set，好处在于，fastutil集合类，可以减小内存的占用，并且在进行集合的遍历、根据索引（或者key）获取元素的值和设置元素的值的时候，提供更快的存取速度；
   fastutil也提供了64位的array、set和list，以及高性能快速的，以及实用的IO类，来处理二进制和文本类型的文件
@@ -104,7 +157,7 @@ fastutil还提供了一些JDK标准类库中没有的额外功能（比如双向
 
 fastutil除了对象和原始类型为元素的集合，fastutil也提供引用类型的支持，但是对引用类型是使用等于号（=）进行比较的，而不是equals()方法。
 
-* Spark中应用fastutil的场景
+* **Spark中应用fastutil的场景**
 
 1. 如果算子函数使用了外部变量；那么第一，你可以使用Broadcast广播变量优化；第二，可以使用Kryo序列化类库，提升序列化性能和效率；第三，如果外部变量是某种比较大的集合，那么可以考虑使用fastutil改写外部变量，首先从源头上就减少内存的占用，通过广播变量进一步减少内存占用，再通过Kryo序列化类库进一步减少内存占用。
 
@@ -117,14 +170,14 @@ fastutil除了对象和原始类型为元素的集合，fastutil也提供引用�
   <version>7.0.6</version>
 </dependency>
 ```
-> UserVisitSessionAnalyzeSpark.scala中831行有示例。
+> [UserVisitSessionAnalyzeSpark.java](./src/main/java/com/yt/spark/spark/session/UserVisitSessionAnalyzeSpark.java)中831行有示例。
 
 #### 调节数据本地化等待时长
-PROCESS_LOCAL > NODE_LOCAL > NO_PREF > RACK_LOCAL > ANY  
+`PROCESS_LOCAL > NODE_LOCAL > NO_PREF > RACK_LOCAL > ANY`
 Spark要对任务(task)进行分配的时候, 会计算出每个task要计算的是哪个分片的数据(partition)，Spark的task分配算法，会按照上面的顺序来进行分配。  
 可能PROCESS_LOCAL节点的计算资源和计算能力都满了；Spark会等待一段时间，默认情况下是3s钟(不是绝对的，还有很多种情况，对不同的本地化级别，都会去等待)，到最后，就会选择一个比较差的本地化级别，比如说，将task分配到靠它要计算的数据所在节点，比较近的一个节点，然后进行计算。  
 
-* 何时调节这个参数
+* **何时调节这个参数**
 
 观察日志，spark作业的运行日志，先用client模式，在本地就直接可以看到比较全的日志。日志里面会显示，starting task。。。，PROCESS LOCAL、NODE LOCAL
 如果是发现，好多的级别都是NODE_LOCAL、ANY，那么最好就去调节一下数据本地化的等待时长。调节完，应该是要反复调节，每次调节完以后，再来运行，观察日志
@@ -142,7 +195,7 @@ spark中，堆内存又被划分成了两块儿，一块儿是专门用来给RDD
 `spark.storage.memoryFraction，0.6 -> 0.5 -> 0.4 -> 0.2`
 
 #### JVM调优之调节Executor堆外内存与连接等待时长
-* Executor堆外内存  
+* **Executor堆外内存**  
 
 有时候，如果你的spark作业处理的数据量特别特别大，几亿数据量；然后spark作业一运行，时不时的报错，shuffle file cannot find，executor、task lost，out of memory（内存溢出）
 
@@ -152,7 +205,8 @@ spark中，堆内存又被划分成了两块儿，一块儿是专门用来给RDD
 ```
 --conf spark.yarn.executor.memoryOverhead=2048
 ```
-spark-submit脚本里面，去用--conf的方式，去添加配置；一定要注意！！！切记，不是在你的spark作业代码中，用new SparkConf().set()这种方式去设置，不要这样去设置，是没有用的！一定要在spark-submit脚本中去设置。
+
+**spark-submit脚本里面，去用--conf的方式，去添加配置；** 切记，不是在你的spark作业代码中，用new SparkConf().set()这种方式去设置，不要这样去设置，是没有用的！一定要在spark-submit脚本中去设置。
 
 默认情况下，这个堆外内存上限大概是300多M；通常项目，真正处理大数据的时候，这里都会出现问题，导致spark作业反复崩溃，无法运行；此时就会去调节这个参数，到至少1G（1024M），甚至说2G、4G
 
@@ -165,14 +219,14 @@ spark-submit脚本里面，去用--conf的方式，去添加配置；一定要�
 ```
 --conf spark.core.connection.ack.wait.timeout=300
 ```
-spark-submit脚本，切记，不是在new SparkConf().set()这种方式来设置的。通常来说，可以避免部分的偶尔出现的某某文件拉取失败，某某文件lost
+**spark-submit脚本，切记，不是在new SparkConf().set()这种方式来设置的**。通常来说，可以避免部分的偶尔出现的某某文件拉取失败，某某文件lost
 
 
 ### Shuffle调优
 
 #### 调节Map端内存缓冲与Reduce端内存占比
 
-* 问题
+* **问题**
 
 默认情况下，shuffle的map task，输出到磁盘文件的时候，统一都会先写入每个task自己关联的一个内存缓冲区。这个缓冲区大小，默认是32kb。
 每一次，当内存缓冲区满溢之后，才会进行spill操作，溢写操作，溢写到磁盘文件中去。
@@ -180,7 +234,7 @@ spark-submit脚本，切记，不是在new SparkConf().set()这种方式来设�
 reduce端task，在拉取到数据之后，会用HashMap的数据格式，来对各个key对应的values进行汇聚。在进行汇聚、聚合等操作的时候，实际上，使用的就是自己对应的executor的内存，executor（jvm进程，堆），默认executor内存中划分给reduce task进行聚合的比例，是0.2。
 问题来了，因为比例是0.2，所以，理论上，很有可能会出现，拉取过来的数据很多，那么在内存中，放不下；这个时候，默认的行为，就是说，将在内存放不下的数据，都spill（溢写）到磁盘文件中去。
 
-* 调优
+* **调优**
 ```
 spark.shuffle.file.buffer
 spark.shuffle.memoryFraction
@@ -199,42 +253,42 @@ spark.shuffle.memoryFraction
 ### 算子调优
 
 #### map与mapPartitions
-* 问题
+* **问题**
 
 如果是普通的map，比如一个partition中有1万条数据；那么你的function要执行和计算1万次。使用MapPartitions操作之后，一个task仅仅会执行一次function，function一次接收所有的partition数据。只要执行一次就可以了，性能比较高。  
 缺点也很显而易见，就是一个partition中数据量太大会导致OOM。
 
-* 调优
+* **调优**
 
 所以说在数据量不是很大的时候可以用这个。
 
 #### filter过后使用coalesce
-* 问题
+* **问题**
 
 1. 每个partition数据量变少了，但是在后面进行处理的时候，还是要跟partition数量一样数量的task，来进行处理；有点浪费task计算资源。
 2. 每个partition的数据量不一样，会导致后面的每个task处理每个partition的时候，每个task要处理的数据量就不同，这个时候很容易发生数据倾斜
 
-* 调优
+* **调优**
 
 coalesce算子主要就是用于在filter操作之后，针对每个partition的数据量各不相同的情况，来压缩partition的数量。减少partition的数量，而且让每个partition的数据量都尽量均匀紧凑。
 
 #### foreachPartition优化写数据库
-* 问题
+* **问题**
 
 foreach会对每条数据都创建一个数据库连接，很消耗性能
 
-* 调优
+* **调优**
 
 使用foreachPartition，只会对一个partition中的数据创建一个连接
 
 #### repartition解决Spark SQL并行度过低
 
-* 问题
+* **问题**
 
 在[调节并行度](#调节并行度)中介绍了并行度应该怎么设置，如果没有使用Spark SQL，那么整个spark application默认所有stage的并行度都是你设置的那个参数（除非使用coalesce算子缩减过partition数量）。  
 如果用了Spark SQL，那个stage的并行度，你没法自己指定。Spark SQL自己会默认根据hive表对应的hdfs文件的block，自动设置Spark SQL查询所在的那个stage的并行度。通过spark.default.parallelism参数指定的并行度，只会在没有Spark SQL的stage中生效。  
 
-* 调优
+* **调优**
 
 可以将你用Spark SQL查询出来的RDD，使用repartition算子，去重新进行分区，此时可以分区成多个partition，比如从20个partition，分区成100个。
 
@@ -257,9 +311,9 @@ reduceByKey，相较于普通的shuffle操作（比如groupByKey），它的一�
 spark.shuffle.io.maxRetries 3
 spark.shuffle.io.retryWait 5s
 ```
-第一个参数，意思就是说，shuffle文件拉取的时候，如果没有拉取到（拉取失败），最多或重试几次（会重新拉取几次文件），默认是3次。
+**第一个参数**，意思就是说，shuffle文件拉取的时候，如果没有拉取到（拉取失败），最多或重试几次（会重新拉取几次文件），默认是3次。
 
-第二个参数，意思就是说，每一次重试拉取文件的时间间隔，默认是5s钟。
+**第二个参数**，意思就是说，每一次重试拉取文件的时间间隔，默认是5s钟。
 
 
 #### Yarn队列资源不足导致Application直接失败
@@ -269,7 +323,7 @@ spark.shuffle.io.retryWait 5s
 如果日志文件中出现了类似于Serializable、Serialize等等报错的log，那就是出现了序列化报错。  
 序列化报错要注意的三个点：
 
-1. 你的算子函数里面，如果使用到了外部的自定义类型的变量，那么此时，就要求你的自定义类型，必须是可序列化的。
+1. **你的算子函数里面，如果使用到了外部的自定义类型的变量，那么此时，就要求你的自定义类型，必须是可序列化的。**
 ``` java
 final Teacher teacher = new Teacher("leo");
 
@@ -287,7 +341,7 @@ public class Teacher implements Serializable {
 }
 ```
 
-2. 如果要将自定义的类型，作为RDD的元素类型，那么自定义的类型也必须是可以序列化的
+2. **如果要将自定义的类型，作为RDD的元素类型，那么自定义的类型也必须是可以序列化的**
 ``` java
 JavaPairRDD<Integer, Teacher> teacherRDD
 JavaPairRDD<Integer, Student> studentRDD
@@ -302,7 +356,7 @@ public class Student implements Serializable {
 }
 ```
 
-3. 不能在上述两种情况下，去使用一些第三方的，不支持序列化的类型
+3. **不能在上述两种情况下，去使用一些第三方的，不支持序列化的类型**
 ``` java
 Connection conn = 
 
@@ -319,7 +373,7 @@ public void call(Row row) throws Exception {
 #### 算子函数返回NULL导致的问题
 在有些算子函数里面，是需要我们有一个返回值的。但是，有时候，我们可能对某些值，就是不想有什么返回值。我们如果直接返回NULL的话，那么可以不幸的告诉大家，是不行的，会报错的。
 
-* 解决办法
+* **解决办法**
 1. 在返回的时候，返回一些特殊的值，不要返回null，比如“-999”
 2. 在通过算子获取到了一个RDD之后，可以对这个RDD执行filter操作，进行数据过滤。filter内，可以对数据进行判定，如果是-999，那么就返回false，给过滤掉就可以了。
 3. 在filter之后，可以使用coalesce算子压缩一下RDD的partition的数量，让各个partition的数据比较紧凑一些。也能提升一些性能。
@@ -344,12 +398,12 @@ spark-submit脚本中，加入以下配置即可：
 ### 数据倾斜解决方案
 
 #### 聚合源数据
-1. 第一种方案
+**1. 第一种方案**
 
-一般都是hive表中对每个key进行聚合，按照key进行分组，将key对应的所有的values，全部用一种特殊的格式，拼接到一个字符串里面去，比如“key=sessionid, value: action_seq=1|user_id=1|search_keyword=火锅|category_id=001;action_seq=2|user_id=1|search_keyword=涮肉|category_id=001”。
+一般都是hive表中对每个key进行聚合，按照key进行分组，将key对应的所有的values，全部用一种特殊的格式，拼接到一个字符串里面去，比如`“key=sessionid, value: action_seq=1|user_id=1|search_keyword=火锅|category_id=001;action_seq=2|user_id=1|search_keyword=涮肉|category_id=001”`。
 对key进行group，在spark中拿到的数据就是key=sessionid，values<Iterable>，所以在spark中就不需要再去执行groupByKey+map这种操作了。直接对每个key对应的values字符串，map操作，进行你需要的操作即可。key,values串。
 
-2. 第二种方案
+**2. 第二种方案**
 
 你可能没有办法对每个key，就聚合出来一条数据；那么也可以做一个妥协；对每个key对应的数据，10万条；有好几个粒度，比如10万条里面包含了几个城市、几天、几个地区的数据，现在放粗粒度；直接就按照城市粒度，做一下聚合，几个城市，几天、几个地区粒度的数据，都给聚合起来。
 
@@ -361,7 +415,7 @@ spark-submit脚本中，加入以下配置即可：
 
 #### 使用随机key实现双重聚合
 如下图所示, 我们可以把导致数据倾斜的key打上不同的随机前缀，这样就划分成多个不同的key
-<div align=center>
+<div align=center width=70% height=50%>
     <img src="./pic/随机key实现双重聚合.png">
 </div>
 
@@ -369,7 +423,7 @@ groupByKey和reduceByKey使用这用会有很好的效果。
 
 #### 将reduce join转为map join
 reduce join就是普通的join，是需要shuffle的。如下图所示
-<div align=center>
+<div align=center width=70% height=50%>
     <img src="./pic/reduce join转为map join.png">
 </div>
 
@@ -378,7 +432,7 @@ reduce join就是普通的join，是需要shuffle的。如下图所示
 
 #### sample采样倾斜key进行两次join
 可以将数据抽样，得到样本中次数最多的key，可能就是会导致数据倾斜的key。然后就把数据分为普通key和产生倾斜的key分别join，最后在合并。如下图：
-<div align=center>
+<div align=center width=70% height=50%>
     <img src="./pic/sample采样倾斜key进行两次join.png">
 </div>
 
@@ -481,7 +535,7 @@ receiver主要接收到数据，那么就会立即将数据写入一份到容错
 无论你的程序怎么挂掉，或者是数据丢失，那么数据都不肯能会永久性的丢失；因为肯定有副本。
 
 #### Spark Streaming性能调优
-1. 并行化数据接收：处理多个topic的数据时比较有效
+**1. 并行化数据接收：处理多个topic的数据时比较有效**
 ``` java
 int numStreams = 5;
 List<JavaPairDStream<String, String>> kafkaStreams = new ArrayList<JavaPairDStream<String, String>>(numStreams);
@@ -491,30 +545,30 @@ for (int i = 0; i < numStreams; i++) {
 JavaPairDStream<String, String> unifiedStream = streamingContext.union(kafkaStreams.get(0), kafkaStreams.subList(1, kafkaStreams.size()));
 unifiedStream.print();
 ```
-2. spark.streaming.blockInterval：增加block数量，增加每个batch rdd的partition数量，增加处理并行度
+**2. spark.streaming.blockInterval：增加block数量，增加每个batch rdd的partition数量，增加处理并行度**
 
 receiver从数据源源源不断地获取到数据；首先是会按照block interval，将指定时间间隔的数据，收集为一个block；默认时间是200ms，官方推荐不要小于50ms；接着呢，会将指定batch interval时间间隔内的block，合并为一个batch；创建为一个rdd，然后启动一个job，去处理这个batch rdd中的数据
 
 batch rdd，它的partition数量就是block的数量，就意味着每个batch rdd有多少个task会并行计算和处理。可以手动调节block interval，减少block interval，每个batch可以包含更多的block，也就有更多的task并行处理每个batch rdd。
 
 
-3. inputStream.repartition(<number of partitions>)：重分区，增加每个batch rdd的partition数量
+**3. inputStream.repartition(<number of partitions>)：重分区，增加每个batch rdd的partition数量**
 
 对DStream中的rdd进行重分区，去重分区成指定数量的分区，这样也可以提高指定DStream的rdd的计算并行度
 
-4. 调节并行度
+**4. 调节并行度**
 ```
 spark.default.parallelism // 参见前面性能调优中这个点
 reduceByKey(numPartitions)
 ```
-5. 使用Kryo序列化机制：
+**5. 使用Kryo序列化机制：**
 
 spark streaming，也是有不少序列化的场景的
 * 提高序列化task发送到executor上执行的性能，如果task很多的时候，task序列化和反序列化的性能开销也比较可观
 * 默认输入数据的存储级别是StorageLevel.MEMORY_AND_DISK_SER_2，Receiver接收到数据，默认就会进行持久化操作；首先序列化数据，存储到内存中；如果内存资源不够大，写入磁盘；
 而且，还会写一份冗余副本到其他executor的block manager中，进行数据冗余。
 
-6. batch interval：每个的处理时间必须小于batch interval
+**6. batch interval：每个的处理时间必须小于batch interval**
 
 可以在spark ui上观察spark streaming运行情况的；可以看到batch的处理时间；如果发现batch的处理时间大于batch interval，就必须调节batch interval, 尽量不要让batch处理时间大于batch interval  
 
