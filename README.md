@@ -440,16 +440,16 @@ spark-submit脚本中，加入以下配置即可：
 
 #### 使用随机key实现双重聚合
 如下图所示, 我们可以把导致数据倾斜的key打上不同的随机前缀，这样就划分成多个不同的key
-<div align=center, width=70%, height=50%>
-    <img src="./pic/随机key实现双重聚合.png">
+<div align=center>
+    <img src="./pic/随机key实现双重聚合.png", width=70%, height=50%>
 </div>
 
 groupByKey和reduceByKey使用这用会有很好的效果。
 
 #### 将reduce join转为map join
 reduce join就是普通的join，是需要shuffle的。如下图所示
-<div align=center, width=70%, height=50%>
-    <img src="./pic/reduce join转为map join.png">
+<div align=center>
+    <img src="./pic/reduce join转为map join.png", width=70%, height=50%>
 </div>
 
 如果两个RDD要进行join，其中一个RDD是比较小的。一个RDD是100万数据，一个RDD是1万数据。broadcast出去那个小RDD的数据以后，就会在每个executor的block manager中都驻留一份。
@@ -457,8 +457,8 @@ reduce join就是普通的join，是需要shuffle的。如下图所示
 
 #### sample采样倾斜key进行两次join
 可以将数据抽样，得到样本中次数最多的key，可能就是会导致数据倾斜的key。然后就把数据分为普通key和产生倾斜的key分别join，最后在合并。如下图：
-<div align=center, width=70%, height=50%>
-    <img src="./pic/sample采样倾斜key进行两次join.png">
+<div align=center>
+    <img src="./pic/sample采样倾斜key进行两次join.png", width=70%, height=50%>
 </div>
 
 对于join，优先采用上一小节的内容，将reduce join转为map join。如果是两个RDD数据都很大，而且有一两个key导致数据倾斜，就可以考虑采用这种方案。如果导致数据倾斜的key特别多，那么请看下一小节。
