@@ -49,7 +49,7 @@ spark的一个小项目以及笔记
 
 * 用户访问session分析业务，session聚合统计、session随机抽取、top10热门分类、top10活跃用户  
     > 1、按条件筛选session  
-      2、统计出符合条件的session中，访问时长在1s~3s、4s~6s、7s~9s、10s~30s、30s~60s、1m~3m、3m~10m、10m~30m、30m以上各个范围内的session占比；访问步长在1~3、4~6、7~9、10~30、30~60、60以上各个范围内的session占比  
+      2、统计出符合条件的session中，访问时长在1s\~3s、4s\~6s、7s\~9s、10s\~30s、30s\~60s、1m\~3m、3m\~10m、10m\~30m、30m以上各个范围内的session占比；访问步长在1~3、4~6、7~9、10~30、30~60、60以上各个范围内的session占比  
       3、在符合条件的session中，按照时间比例随机抽取1000个session  
       4、在符合条件的session中，获取点击、下单和支付数量排名前10的品类  
       5、对于排名前10的品类，分别获取其点击次数排名前10的session  
@@ -81,7 +81,7 @@ spark的一个小项目以及笔记
 * 技术点：Hive与MySQL异构数据源、RDD转换为DataFrame、注册和使用临时表、自定义UDAF聚合函数、自定义get_json_object等普通函数、Spark SQL的高级内置函数（if与case when等）、开窗函数（高端）  
 * Spark SQL数据倾斜解决方案
 
-代码：[AreaTop3ProductSpark](./src/main/java/com/yt/spark/spark/produce/AreaTop3ProductSpark.java)
+代码：[AreaTop3ProductSpark](./src/main/java/com/yt/spark/spark/product/AreaTop3ProductSpark.java)
 
 
 4. **广告流量实时统计模块**
@@ -127,7 +127,7 @@ spark的一个小项目以及笔记
 > 假设，现在已经在spark-submit脚本里面，给我们的spark作业分配了足够多的资源，比如50个executor，每个executor有10G内存，每个executor有3个cpu core。基本已经达到了集群或者yarn队列的资源上限。
   但是task没有设置，或者设置的很少，比如就设置了，100个task。50个executor，每个executor有3个cpu core，也就是说，你的Application任何一个stage运行的时候，都有总数在150个cpu core，可以并行运行。但是你现在，只有100个task，平均分配一下，每个executor分配到2个task，ok，那么同时在运行的task，只有100个，每个executor只会并行运行2个task。每个executor剩下的一个cpu core，就浪费掉了。
 
-1. **官方推荐**，task数量设置成spark application总cpu core数量的2~3倍，比如150个cpu core，基本要设置task数量为300~500
+1. **官方推荐**，task数量设置成spark application总cpu core数量的2\~3倍，比如150个cpu core，基本要设置task数量为300\~500
 
 2. **如何设置一个Spark Application的并行度** 
 ``` scala
@@ -137,19 +137,19 @@ SparkConf conf = new SparkConf()
 
 #### 重构RDD与持久化
 
-1. **RDD架构重构与优化**
+1. **_RDD架构重构与优化_**
 尽量去复用RDD，差不多的RDD，可以抽取称为一个共同的RDD，供后面的RDD计算时，反复使用。
 
-2. **公共RDD一定要实现持久化**
+2. **_公共RDD一定要实现持久化_**
 对于要多次计算和使用的公共RDD，一定要进行持久化。
 
-3. **持久化，是可以进行序列化的**
+3. **_持久化，是可以进行序列化的_**
 如果正常将数据持久化在内存中，那么可能会导致内存的占用过大，这样的话，也许，会导致OOM内存溢出。  
 当纯内存无法支撑公共RDD数据完全存放的时候，就优先考虑，使用序列化的方式在纯内存中存储。将RDD的每个partition的数据，序列化成一个大的字节数组，就一个对象；序列化后，大大减少内存的空间占用。  
 如果序列化纯内存方式，还是导致OOM，内存溢出；就只能考虑磁盘的方式，内存+磁盘的普通方式（无序列化）。  
 **缺点**：在获取数据的时候需要反序列化
 
-4. 为了数据的高可靠性，而且内存充足，可以使用双副本机制，进行持久化
+4. **_数据的高可靠性_**，
 在内存资源很充沛的情况下，可以持久化一个副本
 
 #### 广播大变量
@@ -198,13 +198,13 @@ fastutil除了对象和原始类型为元素的集合，fastutil也提供引用�
 > [UserVisitSessionAnalyzeSpark.java](./src/main/java/com/yt/spark/spark/session/UserVisitSessionAnalyzeSpark.java)中831行有示例。
 
 #### 调节数据本地化等待时长
-`PROCESS_LOCAL > NODE_LOCAL > NO_PREF > RACK_LOCAL > ANY`
+`PROCESS_LOCAL > NODE_LOCAL > NO_PREF > RACK_LOCAL > ANY`  
 Spark要对任务(task)进行分配的时候, 会计算出每个task要计算的是哪个分片的数据(partition)，Spark的task分配算法，会按照上面的顺序来进行分配。  
 可能PROCESS_LOCAL节点的计算资源和计算能力都满了；Spark会等待一段时间，默认情况下是3s钟(不是绝对的，还有很多种情况，对不同的本地化级别，都会去等待)，到最后，就会选择一个比较差的本地化级别，比如说，将task分配到靠它要计算的数据所在节点，比较近的一个节点，然后进行计算。  
 
 * **何时调节这个参数**
 
-观察日志，spark作业的运行日志，先用client模式，在本地就直接可以看到比较全的日志。日志里面会显示，starting task。。。，PROCESS LOCAL、NODE LOCAL
+观察日志，spark作业的运行日志，先用client模式，在本地就直接可以看到比较全的日志。日志里面会显示，starting task...，PROCESS LOCAL、NODE LOCAL
 如果是发现，好多的级别都是NODE_LOCAL、ANY，那么最好就去调节一下数据本地化的等待时长。调节完，应该是要反复调节，每次调节完以后，再来运行，观察日志
 `spark.locality.wait`, 3s, 6s, 10s...
 
@@ -231,11 +231,11 @@ spark中，堆内存又被划分成了两块儿，一块儿是专门用来给RDD
 --conf spark.yarn.executor.memoryOverhead=2048
 ```
 
-**spark-submit脚本里面，去用--conf的方式，去添加配置；** 切记，不是在你的spark作业代码中，用new SparkConf().set()这种方式去设置，不要这样去设置，是没有用的！一定要在spark-submit脚本中去设置。
+**_spark-submit脚本里面，去用--conf的方式，去添加配置；_** 切记，不是在你的spark作业代码中，用new SparkConf().set()这种方式去设置，不要这样去设置，是没有用的！一定要在spark-submit脚本中去设置。
 
 默认情况下，这个堆外内存上限大概是300多M；通常项目，真正处理大数据的时候，这里都会出现问题，导致spark作业反复崩溃，无法运行；此时就会去调节这个参数，到至少1G（1024M），甚至说2G、4G
 
-* 连接等待时长  
+* **连接等待时长**  
 
 如果Executor远程从另一个Executor中拉取数据的时候，那个Executor正好在gc，此时呢，无法建立网络连接，会卡住；spark默认的网络连接的超时时长，是60s；如果卡住60s都无法建立连接的话，那么就宣告失败了。
 
@@ -244,7 +244,7 @@ spark中，堆内存又被划分成了两块儿，一块儿是专门用来给RDD
 ```
 --conf spark.core.connection.ack.wait.timeout=300
 ```
-**spark-submit脚本，切记，不是在new SparkConf().set()这种方式来设置的**。通常来说，可以避免部分的偶尔出现的某某文件拉取失败，某某文件lost
+**_spark-submit脚本，切记，不是在new SparkConf().set()这种方式来设置的_**。通常来说，可以避免部分的偶尔出现的某某文件拉取失败，某某文件lost
 
 
 ### Shuffle调优
@@ -290,8 +290,8 @@ spark.shuffle.memoryFraction
 #### filter过后使用coalesce
 * **问题**
 
-1. 每个partition数据量变少了，但是在后面进行处理的时候，还是要跟partition数量一样数量的task，来进行处理；有点浪费task计算资源。
-2. 每个partition的数据量不一样，会导致后面的每个task处理每个partition的时候，每个task要处理的数据量就不同，这个时候很容易发生数据倾斜
+1、每个partition数据量变少了，但是在后面进行处理的时候，还是要跟partition数量一样数量的task，来进行处理；有点浪费task计算资源。  
+2、每个partition的数据量不一样，会导致后面的每个task处理每个partition的时候，每个task要处理的数据量就不同，这个时候很容易发生数据倾斜
 
 * **调优**
 
@@ -348,7 +348,7 @@ spark.shuffle.io.retryWait 5s
 如果日志文件中出现了类似于Serializable、Serialize等等报错的log，那就是出现了序列化报错。  
 序列化报错要注意的三个点：
 
-1. **你的算子函数里面，如果使用到了外部的自定义类型的变量，那么此时，就要求你的自定义类型，必须是可序列化的。**
+1. 你的算子函数里面，如果使用到了外部的自定义类型的变量，那么此时，就要求你的自定义类型，必须是可序列化的。
 ``` java
 final Teacher teacher = new Teacher("leo");
 
@@ -366,7 +366,7 @@ public class Teacher implements Serializable {
 }
 ```
 
-2. **如果要将自定义的类型，作为RDD的元素类型，那么自定义的类型也必须是可以序列化的**
+2. 如果要将自定义的类型，作为RDD的元素类型，那么自定义的类型也必须是可以序列化的
 ``` java
 JavaPairRDD<Integer, Teacher> teacherRDD
 JavaPairRDD<Integer, Student> studentRDD
@@ -381,7 +381,7 @@ public class Student implements Serializable {
 }
 ```
 
-3. **不能在上述两种情况下，去使用一些第三方的，不支持序列化的类型**
+3. 不能在上述两种情况下，去使用一些第三方的，不支持序列化的类型
 ``` java
 Connection conn = 
 
@@ -440,7 +440,7 @@ spark-submit脚本中，加入以下配置即可：
 
 #### 使用随机key实现双重聚合
 如下图所示, 我们可以把导致数据倾斜的key打上不同的随机前缀，这样就划分成多个不同的key
-<div align=center width=70% height=50%>
+<div align=center, width=70%, height=50%>
     <img src="./pic/随机key实现双重聚合.png">
 </div>
 
@@ -448,7 +448,7 @@ groupByKey和reduceByKey使用这用会有很好的效果。
 
 #### 将reduce join转为map join
 reduce join就是普通的join，是需要shuffle的。如下图所示
-<div align=center width=70% height=50%>
+<div align=center, width=70%, height=50%>
     <img src="./pic/reduce join转为map join.png">
 </div>
 
@@ -457,7 +457,7 @@ reduce join就是普通的join，是需要shuffle的。如下图所示
 
 #### sample采样倾斜key进行两次join
 可以将数据抽样，得到样本中次数最多的key，可能就是会导致数据倾斜的key。然后就把数据分为普通key和产生倾斜的key分别join，最后在合并。如下图：
-<div align=center width=70% height=50%>
+<div align=center, width=70%, height=50%>
     <img src="./pic/sample采样倾斜key进行两次join.png">
 </div>
 
