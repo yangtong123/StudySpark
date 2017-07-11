@@ -441,7 +441,7 @@ spark-submit脚本中，加入以下配置即可：
 #### 使用随机key实现双重聚合
 如下图所示, 我们可以把导致数据倾斜的key打上不同的随机前缀，这样就划分成多个不同的key
 <div align=center>
-    <img src="./pic/随机key实现双重聚合.png", width=70%, height=50%>
+    <img src="./pic/随机key实现双重聚合.png", width=70%, height=30%>
 </div>
 
 groupByKey和reduceByKey使用这用会有很好的效果。
