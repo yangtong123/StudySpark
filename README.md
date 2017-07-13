@@ -17,7 +17,7 @@ spark的一个小项目以及笔记
         * [JVM调优之调节Executor堆外内存与连接等待时长](#jvm调优之调节executor堆外内存与连接等待时长)
     * [Shuffle调优](#shuffle调优)
         * [调节Map端内存缓冲与Reduce端内存占比](#调节map端内存缓冲与reduce端内存占比)
-        * [spark.shuffle.sort.bypassMergeThreshold](#sparkshufflesortbypassmergeyhreshold)
+        * [spark.shuffle.sort.bypassMergeThreshold](#sparkshufflesortbypassmergethreshold)
     * [算子调优](#算子调优)
         * [map与mapPartitions](#map与mappartitions)
         * [filter过后使用coalesce](#filter过后使用coalesce)
